@@ -1,0 +1,23 @@
+// Basic types
+array Uint32 [byte; 4];
+array Uint64 [byte; 8];
+array Byte32 [byte; 32];
+
+struct CheckpointMessage {
+    entity_id: Byte32,
+    campaign_id: Byte32,
+    timestamp: Uint64,
+    nonce: Uint32,
+}
+
+vector CheckpointMessageVec <CheckpointMessage>;
+
+table VerificationWitness {
+    checkpoint_messages: CheckpointMessageVec,
+}
+
+struct ProofData {
+    entity_id: Byte32,
+    campaign_id: Byte32,
+    proof: Byte32,
+}
