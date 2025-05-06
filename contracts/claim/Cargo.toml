@@ -1,0 +1,20 @@
+[package]
+name = "claim"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+common = { path = "../../crates/common" }
+ckb-hash.workspace = true
+ckb-std.workspace = true
+molecule.workspace = true
+
+[features]
+library = []
+native-simulator = ["library", "ckb-std/native-simulator"]
+
+[profile.release]
+lto = true
+opt-level = "z"
+panic = "abort"
+codegen-units = 1
