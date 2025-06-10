@@ -42,7 +42,7 @@ pub fn calculate_merkle_root(checkpoints: &[CheckpointMessage]) -> Result<[u8; 3
     while hashes.len() > 1 {
         let mut new_hashes: Vec<[u8; 32]> = Vec::new();
 
-        for i in 0..(hashes.len() + 1) / 2 {
+        for i in 0..hashes.len().div_ceil(2) {
             if i * 2 + 1 < hashes.len() {
                 // Hash pair of nodes
                 let mut hasher = new_blake2b();

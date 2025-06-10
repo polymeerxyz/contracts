@@ -1,4 +1,4 @@
-use codegen::{Compiler, Language};
+use molecule_codegen::{Compiler, Language};
 use std::{path, process::Command};
 
 fn main() {

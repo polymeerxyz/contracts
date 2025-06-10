@@ -4,6 +4,6 @@ export function generateTypeId(cellInput: CellInput, index: number): Hex {
   const hash = new HasherCkb();
   hash.update(cellInput.toBytes());
   hash.update(mol.Uint64.encode(index).buffer);
-  let result = hash.digest();
+  const result = hash.digest();
   return result;
 }

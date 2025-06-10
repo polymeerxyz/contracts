@@ -5,16 +5,10 @@ edition = "2021"
 
 [dependencies]
 common = { path = "../../crates/common" }
-ckb-hash.workspace = true
+ckb-hash = { workspace = true, features = ["ckb-contract"] }
 ckb-std.workspace = true
-molecule.workspace = true
+molecule = { workspace = true, features = ["bytes_vec"] }
 
 [features]
 library = []
 native-simulator = ["library", "ckb-std/native-simulator"]
-
-[profile.release]
-lto = true
-opt-level = "z"
-panic = "abort"
-codegen-units = 1

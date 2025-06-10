@@ -18,11 +18,10 @@ codegen-units = 1
 debug = true
 
 [workspace.dependencies]
-ckb-hash = { version = "0.201.0", default-features = false, features = [
-  "ckb-contract",
-] }
-ckb-std = { version = "0.17.2" }
+cc = "1.2.21"
+ckb-gen-types = "0.201.0"
+ckb-hash = { version = "0.201.0", default-features = false }
+ckb-std = "0.17.2"
 faster-hex = { version = "0.10.0", default-features = false }
-molecule = { version = "0.8.0", default-features = false, features = [
-  "bytes_vec",
-] }
+molecule = { version = "0.8.0", default-features = false }
+molecule-codegen = "0.8.0"
