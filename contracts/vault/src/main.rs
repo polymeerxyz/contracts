@@ -17,12 +17,16 @@ ckb_std::default_alloc!(16384, 1258306, 64);
 
 use ckb_std::{
     ckb_constants::Source,
-    ckb_types::{bytes::Bytes, prelude::*},
+    ckb_types::prelude::*,
     high_level::{
-        load_cell, load_cell_data, load_cell_lock, load_cell_lock_hash, load_script, QueryIter,
+        load_cell, load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type_hash,
+        load_script, QueryIter,
     },
 };
-use common::schema::{DistributionCellData, VaultCellData};
+use common::{
+    schema::{DistributionCellData, VaultCellData},
+    NULL_HASH,
+};
 use molecule::prelude::Entity;
 use vault::{
     context::{load_context, VmContext},
@@ -83,15 +87,22 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
     let total_capacity = context.vault_capacity;
     let fee_percent: u64 = context.vault_data.fee_percentage().unpack().into();
 
+    // Validate fee percentage (0-100%)
     if fee_percent > 10000 {
-        return Err(Error::InvalidPercentage);
+        return Err(Error::InvalidFeePercentage);
     }
 
     let expected_fee_capacity = total_capacity * fee_percent / 10000;
 
+    // Ensure the vault has enough capacity to be useful
+    if total_capacity <= expected_fee_capacity {
+        return Err(Error::InvalidVaultTxStructure);
+    }
+
     let mut total_dist_capacity_sum: u64 = 0;
     let mut total_fee_capacity: u64 = 0;
     let mut uniform_reward_from_first_shard: Option<u64> = None;
+    let mut shard_count: u32 = 0;
 
     let output_count = QueryIter::new(load_cell, Source::Output).count();
     if output_count < 2 {
@@ -113,6 +124,7 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
             let shard_data = DistributionCellData::from_slice(&shard_data_bytes)
                 .map_err(|_| Error::InvalidDistributionCellData)?;
 
+            // Verify campaign_id and proof_script_code_hash match the vault
             if shard_data.campaign_id().as_bytes() != context.vault_data.campaign_id().as_bytes()
                 || shard_data.proof_script_code_hash().as_bytes()
                     != context.vault_data.proof_script_code_hash().as_bytes()
@@ -120,10 +132,22 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
                 return Err(Error::InvalidDistributionCellData);
             }
 
+            // Verify shard_id is unique and sequential
+            let shard_id = shard_data.shard_id().unpack();
+            if shard_id != shard_count {
+                return Err(Error::InvalidDistributionCellData);
+            }
+            shard_count += 1;
+
+            // Verify the reward amount is consistent across all shards
             let current_shard_reward = shard_data.uniform_reward_amount().unpack();
+            if current_shard_reward == 0 {
+                return Err(Error::InvalidDistributionCellData);
+            }
+
             if let Some(first_amount) = uniform_reward_from_first_shard {
                 if first_amount != current_shard_reward {
-                    return Err(Error::InconsistentShardRewardAmount);
+                    return Err(Error::InvalidShardRewardConsistency);
                 }
             } else {
                 // This is the first shard we've seen. Store its reward amount.
@@ -140,17 +164,32 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
                 total_fee_capacity += output_capacity;
             } else {
                 // Any other cell type (e.g., a refund cell) is forbidden in this action.
-                return Err(Error::UnknownVaultAction);
+                return Err(Error::InvalidVaultAction);
             }
         }
     }
 
-    if total_dist_capacity_sum + total_fee_capacity != total_capacity {
-        return Err(Error::DistributionCapacityMismatch);
+    // Ensure we have at least one shard
+    if shard_count == 0 {
+        return Err(Error::InvalidVaultTxStructure);
     }
 
+    // Verify total capacity distribution
+    if total_dist_capacity_sum + total_fee_capacity != total_capacity {
+        return Err(Error::InvalidDistributionCapacity);
+    }
+
+    // Verify fee amount is correct
     if total_fee_capacity != expected_fee_capacity {
-        return Err(Error::FeeCapacityMismatch);
+        return Err(Error::InvalidFeeCapacity);
+    }
+
+    // Verify the uniform reward amount makes sense for the total capacity
+    if let Some(reward_amount) = uniform_reward_from_first_shard {
+        let available_for_rewards = total_capacity - expected_fee_capacity;
+        if reward_amount == 0 || available_for_rewards % reward_amount != 0 {
+            return Err(Error::InvalidDistributionCellData);
+        }
     }
 
     Ok(())
@@ -158,32 +197,95 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
 
 fn verify_refund(context: &VmContext) -> Result<(), Error> {
     let output_count = QueryIter::new(load_cell, Source::Output).count();
-    if output_count != 1 {
-        return Err(Error::UnknownVaultAction);
+    if output_count == 0 || output_count > 2 {
+        return Err(Error::InvalidVaultTxStructure);
     }
 
-    let output_lock_hash = load_cell_lock_hash(0, Source::Output)?;
-    if output_lock_hash != context.vault_data.creator_lock_hash().as_slice() {
-        return Err(Error::RefundLockMismatch);
+    let mut total_refund_capacity: u64 = 0;
+    let mut new_vault_capacity: u64 = 0;
+    let mut new_vault_found = false;
+
+    // Get the script hash of the vault's type script to identify a new vault cell.
+    let self_script_hash = load_script()?.calc_script_hash();
+
+    for i in 0..output_count {
+        let output_cell = load_cell(i, Source::Output)?;
+
+        // Check if this output is a new Vault Cell by checking its type script hash.
+        let output_type_hash = load_cell_type_hash(i, Source::Output)?;
+
+        if output_type_hash.is_some() && output_type_hash.unwrap() == self_script_hash.unpack() {
+            // --- THIS IS A NEW VAULT CELL (PARTIAL REFUND) ---
+            if new_vault_found {
+                // There can be at most one new Vault Cell.
+                return Err(Error::InvalidVaultTxStructure);
+            }
+
+            // The new vault must be a perfect clone, except for capacity.
+            // 1. Verify Lock Script is unchanged.
+            let input_lock_hash = load_cell_lock_hash(0, Source::GroupInput)?;
+            let output_lock_hash = load_cell_lock_hash(i, Source::Output)?;
+            if output_lock_hash != input_lock_hash {
+                return Err(Error::InvalidRefundLock);
+            }
+
+            // 2. Verify Data is unchanged.
+            let input_data = load_cell_data(0, Source::GroupInput)?;
+            if load_cell_data(i, Source::Output)? != input_data {
+                return Err(Error::InvalidShardDataModification);
+            }
+
+            new_vault_capacity += output_cell.capacity().unpack();
+            new_vault_found = true;
+        } else {
+            // --- THIS IS NOT A NEW VAULT CELL, SO IT MUST BE THE REFUND CELL ---
+            let output_lock_hash = load_cell_lock_hash(i, Source::Output)?;
+            if output_lock_hash != context.vault_data.creator_lock_hash().as_slice() {
+                // If it's not a new vault and not locked to the creator, it's an invalid output.
+                return Err(Error::InvalidRefundLock);
+            }
+            total_refund_capacity += output_cell.capacity().unpack();
+        }
+    }
+
+    // --- FINAL VALIDATION ---
+    // The sum of the new vault's capacity and the refund's capacity must equal
+    // the original vault's capacity, ensuring no CKB is lost or created.
+    if new_vault_capacity + total_refund_capacity != context.vault_capacity {
+        return Err(Error::InvalidDistributionCapacity);
     }
 
     Ok(())
 }
 
 fn verify_creation() -> Result<(), Error> {
+    // 1. Check data structure validity.
     let vault_data_bytes = load_cell_data(0, Source::GroupOutput)?;
     let vault_data =
         VaultCellData::from_slice(&vault_data_bytes).map_err(|_| Error::InvalidDataStructure)?;
 
-    let fee_percent: u16 = vault_data.fee_percentage().unpack();
+    // 2. Check the fee percentage is valid (0% to 100%).
+    let fee_percent = vault_data.fee_percentage().unpack();
     if fee_percent > 10000 {
-        return Err(Error::InvalidPercentage);
+        return Err(Error::InvalidFeePercentage);
     }
 
-    // The arguments to this Type Script must contain the 32-byte code_hash
-    // of the Distribution contract.
-    let self_args: Bytes = load_script()?.args().unpack();
-    if self_args.len() != 32 {
+    // 4. Ensure critical identifier hashes are not null/empty.
+    if vault_data.campaign_id().as_slice() == NULL_HASH {
+        return Err(Error::InvalidDataStructure);
+    }
+
+    if vault_data.creator_lock_hash().as_slice() == NULL_HASH {
+        return Err(Error::InvalidDataStructure);
+    }
+
+    if vault_data.proof_script_code_hash().as_slice() == NULL_HASH {
+        return Err(Error::InvalidDataStructure);
+    }
+
+    // 3. Check that the script arguments are correctly formatted (must be a 32-byte hash).
+    let args = load_script()?.args();
+    if args.len() != 32 {
         return Err(Error::InvalidArgsLength);
     }
 

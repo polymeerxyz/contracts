@@ -57,14 +57,23 @@ fn verify_merkle_proof(
     dist_data: &DistributionCellData,
     witness: &ClaimWitness,
 ) -> Result<(), Error> {
+    // Create the leaf hash from the proof cell outpoint and subscriber lock hash
     let mut leaf_hasher = new_blake2b();
     leaf_hasher.update(&witness.proof_cell_out_point().as_bytes());
     leaf_hasher.update(&witness.subscriber_lock_hash().as_bytes());
     let mut leaf_hash = [0u8; 32];
     leaf_hasher.finalize(&mut leaf_hash);
 
+    // Verify the merkle path
     let mut computed_hash = leaf_hash;
     for sibling_hash in witness.merkle_proof().into_iter() {
+        // Validate sibling hash is not all zeros (invalid hash)
+        let is_valid_hash = sibling_hash.as_slice().iter().any(|&b| b != 0);
+        if !is_valid_hash {
+            return Err(Error::InvalidMerkleProof);
+        }
+
+        // Compute parent hash by concatenating and hashing the two child hashes
         let mut parent_hasher = new_blake2b();
         if computed_hash.as_ref() < sibling_hash.as_slice() {
             parent_hasher.update(&computed_hash);
@@ -76,6 +85,7 @@ fn verify_merkle_proof(
         parent_hasher.finalize(&mut computed_hash);
     }
 
+    // Final computed hash must match the merkle root in the distribution cell
     if computed_hash != dist_data.merkle_root().as_slice() {
         return Err(Error::InvalidMerkleProof);
     }
@@ -89,17 +99,25 @@ fn verify_proof_cell(
 ) -> Result<(), Error> {
     // Find the input Proof Cell by its Type ID.
     let mut proof_cell_input_index = None;
+    let mut proof_cell_count = 0;
+
     for (i, cell) in QueryIter::new(load_cell, Source::Input).enumerate() {
         let opt_script = cell.type_().to_opt();
         if opt_script.is_some()
             && opt_script.unwrap().code_hash().as_bytes()
                 == dist_data.proof_script_code_hash().as_bytes()
         {
+            proof_cell_count += 1;
             proof_cell_input_index = Some(i);
-            break;
         }
     }
-    let index = proof_cell_input_index.ok_or(Error::ProofCellNotFound)?;
+
+    // Ensure exactly one proof cell is being spent
+    if proof_cell_count != 1 {
+        return Err(Error::InvalidProofCellCount);
+    }
+
+    let index = proof_cell_input_index.ok_or(Error::MissingProofCell)?;
 
     // Check 1: The OutPoint in the witness must match the actual OutPoint being spent.
     let actual_proof_outpoint = load_input_out_point(index, Source::Input)?;
@@ -113,10 +131,16 @@ fn verify_proof_cell(
         .map_err(|_| Error::InvalidDataStructure)?;
 
     if proof_data.campaign_id().as_bytes() != dist_data.campaign_id().as_bytes() {
-        return Err(Error::CampaignIdMismatch);
+        return Err(Error::InvalidCampaignId);
     }
     if proof_data.subscriber_lock_hash().as_bytes() != witness.subscriber_lock_hash().as_bytes() {
-        return Err(Error::RewardLockMismatch);
+        return Err(Error::InvalidRewardLock);
+    }
+    
+    // Check 3: Verify the proof cell's lock hash matches the subscriber's lock hash
+    let proof_cell_lock_hash = load_cell_lock_hash(index, Source::Input)?;
+    if proof_cell_lock_hash != witness.subscriber_lock_hash().as_slice() {
+        return Err(Error::InvalidProofCellLock);
     }
 
     Ok(())
@@ -128,9 +152,14 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
     let input_capacity = input_dist_cell.capacity().unpack();
     let reward_amount = context.dist_data.uniform_reward_amount().unpack();
 
+    // Check if this is the final claim (no capacity left for another reward)
     let is_final_claim = input_capacity == reward_amount;
+
+    // For final claim: only reward cell
+    // For normal claim: reward cell + new distribution cell
     let expected_output_count = if is_final_claim { 1 } else { 2 };
     let total_output_count = QueryIter::new(load_cell, Source::Output).count();
+
     if total_output_count != expected_output_count {
         return Err(Error::InvalidClaimTxStructure);
     }
@@ -147,7 +176,7 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
             }
             let reward_cell = load_cell(i, Source::Output)?;
             if reward_cell.capacity().unpack() != reward_amount {
-                return Err(Error::RewardAmountMismatch);
+                return Err(Error::InvalidRewardAmount);
             }
             reward_cell_found = true;
         } else if output_lock_hash == context.script.calc_script_hash().as_slice() {
@@ -162,18 +191,18 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
             let input_type_hash = load_cell_type_hash(0, Source::GroupInput)?;
             let output_type_hash = load_cell_type_hash(i, Source::Output)?;
             if input_type_hash != output_type_hash {
-                return Err(Error::TypeScriptImmutable);
+                return Err(Error::InvalidTypeScriptModification);
             }
 
             let input_data = load_cell_data(0, Source::GroupInput)?;
             let output_data = load_cell_data(i, Source::Output)?;
             if input_data != output_data {
-                return Err(Error::ShardDataImmutable);
+                return Err(Error::InvalidShardDataModification);
             }
 
             let output_cell = load_cell(i, Source::Output)?;
             if output_cell.capacity().unpack() != input_capacity - reward_amount {
-                return Err(Error::ShardCapacityMismatch);
+                return Err(Error::InvalidShardCapacity);
             }
             new_dist_cell_found = true;
         } else {
@@ -182,7 +211,7 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
     }
 
     if !reward_cell_found {
-        return Err(Error::RewardCellNotFound);
+        return Err(Error::MissingRewardCell);
     }
     if !is_final_claim && !new_dist_cell_found {
         return Err(Error::InvalidClaimTxStructure);

@@ -17,11 +17,12 @@ ckb_std::default_alloc!(16384, 1258306, 64);
 
 use ckb_std::{
     ckb_constants::Source,
-    high_level::{load_cell_data, QueryIter},
+    high_level::{load_cell_data, load_cell_lock_hash, QueryIter},
 };
 use common::{
     schema::ProofCellData,
     type_id::{load_type_id_from_script_args, validate_type_id},
+    NULL_HASH,
 };
 use molecule::prelude::Entity;
 use proof::error::Error;
@@ -43,21 +44,43 @@ fn entry() -> Result<(), Error> {
     match (inputs_count, outputs_count) {
         (0, 1) => verify_creation(),                      // creation
         (1, 0) => verify_consumption(),                   // consumption
-        (1, 1) => Err(Error::ProofCellCannotBeRecreated), // updation
-        _ => Err(Error::InvalidProofTransactionStructure),
+        (1, 1) => Err(Error::InvalidProofCellRecreation), // updation
+        _ => Err(Error::InvalidProofTxStructure),
     }
 }
 
 fn verify_creation() -> Result<(), Error> {
-    let data = load_cell_data(0, Source::GroupOutput)?;
+    // 1. Check data structure validity.
+    let proof_data_bytes = load_cell_data(0, Source::GroupOutput)?;
+    let proof_data = ProofCellData::from_slice(&proof_data_bytes)
+        .map_err(|_| Error::InvalidProofDataStructure)?;
 
-    if ProofCellData::from_slice(&data).is_err() {
+    // 2. Ensure critical identifier hashes are not null/empty.
+    if proof_data.entity_id().as_slice() == NULL_HASH {
         return Err(Error::InvalidProofDataStructure);
+    }
+
+    if proof_data.campaign_id().as_slice() == NULL_HASH {
+        return Err(Error::InvalidProofDataStructure);
+    }
+
+    if proof_data.proof().as_slice() == NULL_HASH {
+        return Err(Error::InvalidProofDataStructure);
+    }
+
+    // 3. Check lock hash is correct.
+    let actual_lock_hash = load_cell_lock_hash(0, Source::GroupOutput)?;
+    if proof_data.subscriber_lock_hash().as_slice() != actual_lock_hash {
+        // We can reuse this error code as it indicates a mismatch related to the lock.
+        return Err(Error::InvalidSubscriberLock);
     }
 
     Ok(())
 }
 
 fn verify_consumption() -> Result<(), Error> {
+    // When a Proof Cell is consumed, we don't need additional validation
+    // beyond what's already enforced by the transaction structure checks.
+    // The cell is being destroyed, which is allowed.
     Ok(())
 }

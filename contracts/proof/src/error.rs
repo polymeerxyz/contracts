@@ -9,8 +9,9 @@ pub enum Error {
     Encoding,
 
     InvalidProofDataStructure = 100,
-    ProofCellCannotBeRecreated,
-    InvalidProofTransactionStructure,
+    InvalidProofCellRecreation,
+    InvalidProofTxStructure,
+    InvalidSubscriberLock,
 
     External(i8),
 }

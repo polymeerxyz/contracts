@@ -2,6 +2,8 @@
 
 extern crate alloc;
 
+pub const NULL_HASH: [u8; 32] = [0u8; 32];
+
 pub mod conversion;
 pub mod error;
 pub mod utils;
