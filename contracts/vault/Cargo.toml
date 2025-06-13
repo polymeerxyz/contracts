@@ -1,11 +1,14 @@
 [package]
-name = "proof"
+name = "vault"
 version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-common = { path = "../../crates/common", features = ["proof", "type_id"] }
-ckb-hash = { workspace = true, features = ["ckb-contract"] }
+common = { path = "../../crates/common", default-features = false, features = [
+  "distribution",
+  "vault",
+] }
+ckb-hash = { workspace = true, default-features = false }
 ckb-std.workspace = true
 molecule = { workspace = true, features = ["bytes_vec"] }
 

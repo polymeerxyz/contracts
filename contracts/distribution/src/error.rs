@@ -8,9 +8,19 @@ pub enum Error {
     LengthNotEnough,
     Encoding,
 
-    InvalidProofDataStructure = 100,
-    ProofCellCannotBeRecreated,
-    InvalidProofTransactionStructure,
+    InvalidDataStructure = 100,
+    InvalidClaimTxStructure,
+    InvalidMerkleProof,
+    InvalidWitnessFormat,
+    InvalidFinalClaim,
+    CampaignIdMismatch,
+    RewardAmountMismatch,
+    RewardLockMismatch,
+    TypeScriptImmutable,
+    ShardDataImmutable,
+    ShardCapacityMismatch,
+    ProofCellNotFound,
+    RewardCellNotFound,
 
     External(i8),
 }

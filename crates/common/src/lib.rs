@@ -2,11 +2,24 @@
 
 extern crate alloc;
 
+pub mod conversion;
 pub mod error;
-pub mod generated;
-pub mod merkle;
-pub mod type_id;
 pub mod utils;
-mod validation;
 
-pub use validation::validate_proof_against_witness;
+#[cfg(feature = "type_id")]
+pub mod type_id;
+
+pub mod base {
+    include!(concat!(env!("OUT_DIR"), "/base.rs"));
+}
+
+pub mod schema {
+    #[cfg(feature = "distribution")]
+    include!(concat!(env!("OUT_DIR"), "/distribution.rs"));
+
+    #[cfg(feature = "proof")]
+    include!(concat!(env!("OUT_DIR"), "/proof.rs"));
+
+    #[cfg(feature = "vault")]
+    include!(concat!(env!("OUT_DIR"), "/vault.rs"));
+}

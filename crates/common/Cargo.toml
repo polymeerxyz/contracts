@@ -10,10 +10,11 @@ faster-hex.workspace = true
 molecule = { workspace = true, features = ["bytes_vec"] }
 
 [features]
-library = []
-native-simulator = ["library", "ckb-std/native-simulator"]
+default = []
+distribution = []
+proof = []
+vault = []
+type_id = []
 
 [build-dependencies]
-cc.workspace = true
-ckb-gen-types.workspace = true
 molecule-codegen.workspace = true

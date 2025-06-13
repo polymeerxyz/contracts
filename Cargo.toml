@@ -5,8 +5,9 @@ members = [
   # Please don't remove the following line, we use it to automatically
   # detect insertion point for newly generated crates.
   # @@INSERTION_POINT@@
-  "contracts/claim",
+  "contracts/distribution",
   "contracts/proof",
+  "contracts/vault",
   "crates/*",
   "tests",
 ]
@@ -19,8 +20,8 @@ debug = true
 
 [workspace.dependencies]
 cc = "1.2.21"
-ckb-gen-types = "0.201.0"
-ckb-hash = { version = "0.201.0", default-features = false }
+ckb-gen-types = "0.202.0"
+ckb-hash = { version = "0.202.0", default-features = false }
 ckb-std = "0.17.2"
 faster-hex = { version = "0.10.0", default-features = false }
 molecule = { version = "0.8.0", default-features = false }
