@@ -8,10 +8,18 @@ pub enum Error {
     LengthNotEnough,
     Encoding,
 
-    InvalidProofCellUpdate = 100,
-    InvalidProofData,
-    InvalidProofTransaction,
-    InvalidSubscriberLockHash,
+    InvalidArgumentLength = 100,
+    InvalidDataStructure,
+    InvalidDistributionCapacity,
+    InvalidDistributionData,
+    InvalidFeeCapacity,
+    InvalidFeePercentage,
+    InvalidRefundLockHash,
+    InvalidShardRewardConsistency,
+    InvalidVaultAction,
+    InvalidVaultData,
+    InvalidVaultDataUpdate,
+    InvalidVaultTransaction,
 
     External(i8),
 }

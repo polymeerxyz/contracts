@@ -1,4 +1,4 @@
-import { ProofData, VerificationWitness } from "./type";
+import { VerificationWitness } from "./type";
 
 export async function decode() {
   const witness = VerificationWitness.decode(

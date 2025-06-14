@@ -40,7 +40,7 @@ enum MyScriptName {
 }
 
 export function getMyScript(name: keyof typeof MyScriptName): ScriptInfo {
-  let script = offCKB.myScripts[name];
+  const script = offCKB.myScripts[name];
   if (!script) {
     throw new Error(`Script ${name} not found`);
   }
@@ -50,7 +50,7 @@ export function getMyScript(name: keyof typeof MyScriptName): ScriptInfo {
 export function getSystemScript(
   name: keyof typeof SystemScriptName
 ): ScriptInfo {
-  let script = offCKB.systemScripts[name];
+  const script = offCKB.systemScripts[name];
   if (!script) {
     throw new Error(`Script ${name} not found`);
   }

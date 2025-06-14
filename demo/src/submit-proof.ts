@@ -52,7 +52,7 @@ export async function submitProof(
 
   const proof = getMyScript("proof");
 
-  let tx = Transaction.from({
+  const tx = Transaction.from({
     version: "0x0",
     headerDeps: [],
     outputs: [
@@ -88,7 +88,7 @@ export async function submitProof(
 
   await tx.completeFeeBy(signer);
 
-  let cellInput = tx.inputs[0];
+  const cellInput = tx.inputs[0];
   if (!cellInput) {
     throw new Error("No input found");
   }

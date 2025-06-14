@@ -1,0 +1,16 @@
+import base;
+
+table VaultCellData {
+    // A unique identifier for the campaign.
+    campaign_id:                   Byte32,
+    
+    // The lock hash of the creator, for refunds.
+    creator_lock_hash:             Byte32,
+
+    // The percentage of funds for platform fees (e.g., 1000 for 10.00%).
+    fee_percentage:                Uint16,
+    
+    // The code hash of the platform's Proof Type Script.
+    // This identifies valid proof cells for the entire platform.
+    proof_script_code_hash:        Byte32,
+}
