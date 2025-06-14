@@ -7,9 +7,9 @@ pub enum Error {
     LengthNotEnough,
     Encoding,
 
-    InvalidArgsLength = 10,
-    InvalidArgsNumber,
-    InvalidScriptHashInArgs,
+    InvalidArgumentCount = 10,
+    InvalidArgumentLength,
+    InvalidArgumentScriptHash,
 }
 
 impl From<SysError> for Error {

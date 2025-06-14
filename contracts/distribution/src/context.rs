@@ -21,9 +21,9 @@ pub fn load_context() -> Result<VmContext, Error> {
     let witness_bytes = load_witness_args(0, Source::GroupInput)?;
 
     let dist_data = DistributionCellData::from_slice(&dist_cell_data_bytes)
-        .map_err(|_| Error::InvalidDataStructure)?;
+        .map_err(|_| Error::InvalidDistributionData)?;
     let witness = ClaimWitness::from_slice(witness_bytes.as_slice())
-        .map_err(|_| Error::InvalidWitnessFormat)?;
+        .map_err(|_| Error::InvalidWitnessData)?;
 
     Ok(VmContext {
         dist_data,

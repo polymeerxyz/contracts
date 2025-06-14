@@ -42,37 +42,37 @@ fn entry() -> Result<(), Error> {
     let outputs_count = QueryIter::new(load_cell_data, Source::GroupOutput).count();
 
     match (inputs_count, outputs_count) {
-        (0, 1) => verify_creation(),                      // creation
-        (1, 0) => verify_consumption(),                   // consumption
-        (1, 1) => Err(Error::InvalidProofCellRecreation), // updation
-        _ => Err(Error::InvalidProofTxStructure),
+        (0, 1) => verify_creation(),                  // creation
+        (1, 0) => verify_consumption(),               // consumption
+        (1, 1) => Err(Error::InvalidProofCellUpdate), // updation
+        _ => Err(Error::InvalidProofTransaction),
     }
 }
 
 fn verify_creation() -> Result<(), Error> {
     // 1. Check data structure validity.
     let proof_data_bytes = load_cell_data(0, Source::GroupOutput)?;
-    let proof_data = ProofCellData::from_slice(&proof_data_bytes)
-        .map_err(|_| Error::InvalidProofDataStructure)?;
+    let proof_data =
+        ProofCellData::from_slice(&proof_data_bytes).map_err(|_| Error::InvalidProofData)?;
 
     // 2. Ensure critical identifier hashes are not null/empty.
     if proof_data.entity_id().as_slice() == NULL_HASH {
-        return Err(Error::InvalidProofDataStructure);
+        return Err(Error::InvalidProofData);
     }
 
     if proof_data.campaign_id().as_slice() == NULL_HASH {
-        return Err(Error::InvalidProofDataStructure);
+        return Err(Error::InvalidProofData);
     }
 
     if proof_data.proof().as_slice() == NULL_HASH {
-        return Err(Error::InvalidProofDataStructure);
+        return Err(Error::InvalidProofData);
     }
 
     // 3. Check lock hash is correct.
     let actual_lock_hash = load_cell_lock_hash(0, Source::GroupOutput)?;
     if proof_data.subscriber_lock_hash().as_slice() != actual_lock_hash {
         // We can reuse this error code as it indicates a mismatch related to the lock.
-        return Err(Error::InvalidSubscriberLock);
+        return Err(Error::InvalidSubscriberLockHash);
     }
 
     Ok(())

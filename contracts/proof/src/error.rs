@@ -8,10 +8,10 @@ pub enum Error {
     LengthNotEnough,
     Encoding,
 
-    InvalidProofDataStructure = 100,
-    InvalidProofCellRecreation,
-    InvalidProofTxStructure,
-    InvalidSubscriberLock,
+    InvalidProofCellUpdate = 100,
+    InvalidProofData,
+    InvalidProofTransaction,
+    InvalidSubscriberLockHash,
 
     External(i8),
 }

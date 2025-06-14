@@ -127,20 +127,20 @@ fn verify_proof_cell(
 
     // Check 2: Inspect the Proof Cell's internal data for consistency.
     let proof_cell_data_bytes = load_cell_data(index, Source::Input)?;
-    let proof_data = ProofCellData::from_slice(&proof_cell_data_bytes)
-        .map_err(|_| Error::InvalidDataStructure)?;
+    let proof_data =
+        ProofCellData::from_slice(&proof_cell_data_bytes).map_err(|_| Error::InvalidProofData)?;
 
     if proof_data.campaign_id().as_bytes() != dist_data.campaign_id().as_bytes() {
         return Err(Error::InvalidCampaignId);
     }
     if proof_data.subscriber_lock_hash().as_bytes() != witness.subscriber_lock_hash().as_bytes() {
-        return Err(Error::InvalidRewardLock);
+        return Err(Error::InvalidSubscriberLockHash);
     }
-    
+
     // Check 3: Verify the proof cell's lock hash matches the subscriber's lock hash
     let proof_cell_lock_hash = load_cell_lock_hash(index, Source::Input)?;
     if proof_cell_lock_hash != witness.subscriber_lock_hash().as_slice() {
-        return Err(Error::InvalidProofCellLock);
+        return Err(Error::InvalidProofLockHash);
     }
 
     Ok(())
@@ -161,7 +161,7 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
     let total_output_count = QueryIter::new(load_cell, Source::Output).count();
 
     if total_output_count != expected_output_count {
-        return Err(Error::InvalidClaimTxStructure);
+        return Err(Error::InvalidClaimTransaction);
     }
 
     let mut reward_cell_found = false;
@@ -172,7 +172,7 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
 
         if output_lock_hash == context.witness.subscriber_lock_hash().as_slice() {
             if reward_cell_found {
-                return Err(Error::InvalidClaimTxStructure);
+                return Err(Error::InvalidClaimTransaction);
             }
             let reward_cell = load_cell(i, Source::Output)?;
             if reward_cell.capacity().unpack() != reward_amount {
@@ -184,20 +184,20 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
                 return Err(Error::InvalidFinalClaim);
             }
             if new_dist_cell_found {
-                return Err(Error::InvalidClaimTxStructure);
+                return Err(Error::InvalidClaimTransaction);
             }
 
             // Verify the new shard cell is a perfect, capacity-reduced clone.
             let input_type_hash = load_cell_type_hash(0, Source::GroupInput)?;
             let output_type_hash = load_cell_type_hash(i, Source::Output)?;
             if input_type_hash != output_type_hash {
-                return Err(Error::InvalidTypeScriptModification);
+                return Err(Error::InvalidTypeScriptUpdate);
             }
 
             let input_data = load_cell_data(0, Source::GroupInput)?;
             let output_data = load_cell_data(i, Source::Output)?;
             if input_data != output_data {
-                return Err(Error::InvalidShardDataModification);
+                return Err(Error::InvalidShardDataUpdate);
             }
 
             let output_cell = load_cell(i, Source::Output)?;
@@ -206,7 +206,7 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
             }
             new_dist_cell_found = true;
         } else {
-            return Err(Error::InvalidClaimTxStructure);
+            return Err(Error::InvalidClaimTransaction);
         }
     }
 
@@ -214,7 +214,7 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
         return Err(Error::MissingRewardCell);
     }
     if !is_final_claim && !new_dist_cell_found {
-        return Err(Error::InvalidClaimTxStructure);
+        return Err(Error::InvalidClaimTransaction);
     }
 
     Ok(())

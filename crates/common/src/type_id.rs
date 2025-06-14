@@ -31,7 +31,7 @@ fn locate_first_type_id_output_index() -> Result<usize, Error> {
     QueryIter::new(load_cell_type_hash, Source::Output)
         .flatten()
         .position(|type_hash| type_hash == current_script_hash)
-        .ok_or(Error::InvalidScriptHashInArgs)
+        .ok_or(Error::InvalidArgumentScriptHash)
 }
 
 /// Given a 32-byte type id, this function validates if
@@ -39,7 +39,7 @@ fn locate_first_type_id_output_index() -> Result<usize, Error> {
 pub fn validate_type_id(type_id: [u8; 32]) -> Result<(), Error> {
     if has_type_id_cell(1, Source::GroupInput) || has_type_id_cell(1, Source::GroupOutput) {
         debug!("There can only be at most one input and at most one output type ID cell!");
-        return Err(Error::InvalidArgsNumber);
+        return Err(Error::InvalidArgumentCount);
     }
 
     if !has_type_id_cell(0, Source::GroupInput) {
@@ -54,7 +54,7 @@ pub fn validate_type_id(type_id: [u8; 32]) -> Result<(), Error> {
 
         if calculated_type_id != type_id {
             debug!("Invalid Type ID!");
-            return Err(Error::InvalidScriptHashInArgs);
+            return Err(Error::InvalidArgumentScriptHash);
         }
     }
     Ok(())
@@ -70,7 +70,7 @@ pub fn load_type_id_from_script_args(offset: usize) -> Result<[u8; 32], Error> {
             "Type script args length is not 32 bytes, found: {}",
             args.len() - offset
         );
-        return Err(Error::InvalidArgsLength);
+        return Err(Error::InvalidArgumentLength);
     }
     let mut ret = [0; 32];
     ret.copy_from_slice(&args.as_slice()[offset..offset + 32]);
