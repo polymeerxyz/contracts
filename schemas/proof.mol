@@ -1,6 +1,6 @@
 import base;
 
-table ProofCellData {
+struct ProofCellData {
     // A unique identifier for the content that was consumed.
     entity_id:            Byte32,
 

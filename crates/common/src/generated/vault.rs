@@ -30,10 +30,6 @@ impl ::core::fmt::Display for VaultCellData {
             "proof_script_code_hash",
             self.proof_script_code_hash()
         )?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
         write!(f, " }}")
     }
 }
@@ -44,56 +40,26 @@ impl ::core::default::Default for VaultCellData {
     }
 }
 impl VaultCellData {
-    const DEFAULT_VALUE: [u8; 118] = [
-        118, 0, 0, 0, 20, 0, 0, 0, 52, 0, 0, 0, 84, 0, 0, 0, 86, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    const DEFAULT_VALUE: [u8; 98] = [
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0,
     ];
+    pub const TOTAL_SIZE: usize = 98;
+    pub const FIELD_SIZES: [usize; 4] = [32, 32, 2, 32];
     pub const FIELD_COUNT: usize = 4;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
     pub fn campaign_id(&self) -> Byte32 {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        Byte32::new_unchecked(self.0.slice(start..end))
+        Byte32::new_unchecked(self.0.slice(0..32))
     }
     pub fn creator_lock_hash(&self) -> Byte32 {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
-        Byte32::new_unchecked(self.0.slice(start..end))
+        Byte32::new_unchecked(self.0.slice(32..64))
     }
     pub fn fee_percentage(&self) -> Uint16 {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        let end = molecule::unpack_number(&slice[16..]) as usize;
-        Uint16::new_unchecked(self.0.slice(start..end))
+        Uint16::new_unchecked(self.0.slice(64..66))
     }
     pub fn proof_script_code_hash(&self) -> Byte32 {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[16..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[20..]) as usize;
-            Byte32::new_unchecked(self.0.slice(start..end))
-        } else {
-            Byte32::new_unchecked(self.0.slice(start..))
-        }
+        Byte32::new_unchecked(self.0.slice(66..98))
     }
     pub fn as_reader<'r>(&'r self) -> VaultCellDataReader<'r> {
         VaultCellDataReader::new_unchecked(self.as_slice())
@@ -156,58 +122,24 @@ impl<'r> ::core::fmt::Display for VaultCellDataReader<'r> {
             "proof_script_code_hash",
             self.proof_script_code_hash()
         )?;
-        let extra_count = self.count_extra_fields();
-        if extra_count != 0 {
-            write!(f, ", .. ({} fields)", extra_count)?;
-        }
         write!(f, " }}")
     }
 }
 impl<'r> VaultCellDataReader<'r> {
+    pub const TOTAL_SIZE: usize = 98;
+    pub const FIELD_SIZES: [usize; 4] = [32, 32, 2, 32];
     pub const FIELD_COUNT: usize = 4;
-    pub fn total_size(&self) -> usize {
-        molecule::unpack_number(self.as_slice()) as usize
-    }
-    pub fn field_count(&self) -> usize {
-        if self.total_size() == molecule::NUMBER_SIZE {
-            0
-        } else {
-            (molecule::unpack_number(&self.as_slice()[molecule::NUMBER_SIZE..]) as usize / 4) - 1
-        }
-    }
-    pub fn count_extra_fields(&self) -> usize {
-        self.field_count() - Self::FIELD_COUNT
-    }
-    pub fn has_extra_fields(&self) -> bool {
-        Self::FIELD_COUNT != self.field_count()
-    }
     pub fn campaign_id(&self) -> Byte32Reader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[4..]) as usize;
-        let end = molecule::unpack_number(&slice[8..]) as usize;
-        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+        Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
     pub fn creator_lock_hash(&self) -> Byte32Reader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[8..]) as usize;
-        let end = molecule::unpack_number(&slice[12..]) as usize;
-        Byte32Reader::new_unchecked(&self.as_slice()[start..end])
+        Byte32Reader::new_unchecked(&self.as_slice()[32..64])
     }
     pub fn fee_percentage(&self) -> Uint16Reader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[12..]) as usize;
-        let end = molecule::unpack_number(&slice[16..]) as usize;
-        Uint16Reader::new_unchecked(&self.as_slice()[start..end])
+        Uint16Reader::new_unchecked(&self.as_slice()[64..66])
     }
     pub fn proof_script_code_hash(&self) -> Byte32Reader<'r> {
-        let slice = self.as_slice();
-        let start = molecule::unpack_number(&slice[16..]) as usize;
-        if self.has_extra_fields() {
-            let end = molecule::unpack_number(&slice[20..]) as usize;
-            Byte32Reader::new_unchecked(&self.as_slice()[start..end])
-        } else {
-            Byte32Reader::new_unchecked(&self.as_slice()[start..])
-        }
+        Byte32Reader::new_unchecked(&self.as_slice()[66..98])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for VaultCellDataReader<'r> {
@@ -222,44 +154,12 @@ impl<'r> molecule::prelude::Reader<'r> for VaultCellDataReader<'r> {
     fn as_slice(&self) -> &'r [u8] {
         self.0
     }
-    fn verify(slice: &[u8], compatible: bool) -> molecule::error::VerificationResult<()> {
+    fn verify(slice: &[u8], _compatible: bool) -> molecule::error::VerificationResult<()> {
         use molecule::verification_error as ve;
         let slice_len = slice.len();
-        if slice_len < molecule::NUMBER_SIZE {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE, slice_len);
+        if slice_len != Self::TOTAL_SIZE {
+            return ve!(Self, TotalSizeNotMatch, Self::TOTAL_SIZE, slice_len);
         }
-        let total_size = molecule::unpack_number(slice) as usize;
-        if slice_len != total_size {
-            return ve!(Self, TotalSizeNotMatch, total_size, slice_len);
-        }
-        if slice_len < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, HeaderIsBroken, molecule::NUMBER_SIZE * 2, slice_len);
-        }
-        let offset_first = molecule::unpack_number(&slice[molecule::NUMBER_SIZE..]) as usize;
-        if offset_first % molecule::NUMBER_SIZE != 0 || offset_first < molecule::NUMBER_SIZE * 2 {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        if slice_len < offset_first {
-            return ve!(Self, HeaderIsBroken, offset_first, slice_len);
-        }
-        let field_count = offset_first / molecule::NUMBER_SIZE - 1;
-        if field_count < Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        } else if !compatible && field_count > Self::FIELD_COUNT {
-            return ve!(Self, FieldCountNotMatch, Self::FIELD_COUNT, field_count);
-        };
-        let mut offsets: Vec<usize> = slice[molecule::NUMBER_SIZE..offset_first]
-            .chunks_exact(molecule::NUMBER_SIZE)
-            .map(|x| molecule::unpack_number(x) as usize)
-            .collect();
-        offsets.push(total_size);
-        if offsets.windows(2).any(|i| i[0] > i[1]) {
-            return ve!(Self, OffsetsNotMatch);
-        }
-        Byte32Reader::verify(&slice[offsets[0]..offsets[1]], compatible)?;
-        Byte32Reader::verify(&slice[offsets[1]..offsets[2]], compatible)?;
-        Uint16Reader::verify(&slice[offsets[2]..offsets[3]], compatible)?;
-        Byte32Reader::verify(&slice[offsets[3]..offsets[4]], compatible)?;
         Ok(())
     }
 }
@@ -271,6 +171,8 @@ pub struct VaultCellDataBuilder {
     pub(crate) proof_script_code_hash: Byte32,
 }
 impl VaultCellDataBuilder {
+    pub const TOTAL_SIZE: usize = 98;
+    pub const FIELD_SIZES: [usize; 4] = [32, 32, 2, 32];
     pub const FIELD_COUNT: usize = 4;
     pub fn campaign_id(mut self, v: Byte32) -> Self {
         self.campaign_id = v;
@@ -293,27 +195,9 @@ impl molecule::prelude::Builder for VaultCellDataBuilder {
     type Entity = VaultCellData;
     const NAME: &'static str = "VaultCellDataBuilder";
     fn expected_length(&self) -> usize {
-        molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1)
-            + self.campaign_id.as_slice().len()
-            + self.creator_lock_hash.as_slice().len()
-            + self.fee_percentage.as_slice().len()
-            + self.proof_script_code_hash.as_slice().len()
+        Self::TOTAL_SIZE
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
-        let mut total_size = molecule::NUMBER_SIZE * (Self::FIELD_COUNT + 1);
-        let mut offsets = Vec::with_capacity(Self::FIELD_COUNT);
-        offsets.push(total_size);
-        total_size += self.campaign_id.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.creator_lock_hash.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.fee_percentage.as_slice().len();
-        offsets.push(total_size);
-        total_size += self.proof_script_code_hash.as_slice().len();
-        writer.write_all(&molecule::pack_number(total_size as molecule::Number))?;
-        for offset in offsets.into_iter() {
-            writer.write_all(&molecule::pack_number(offset as molecule::Number))?;
-        }
         writer.write_all(self.campaign_id.as_slice())?;
         writer.write_all(self.creator_lock_hash.as_slice())?;
         writer.write_all(self.fee_percentage.as_slice())?;

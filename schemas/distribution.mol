@@ -1,6 +1,6 @@
 import base;
 
-table DistributionCellData {
+struct DistributionCellData {
     // A unique identifier for the campaign this shard belongs to.
     campaign_id:           Byte32,
 
@@ -18,7 +18,7 @@ table DistributionCellData {
     uniform_reward_amount: Uint64,
 }
 
-table OutPoint {
+struct OutPoint {
     tx_hash: Byte32,
     index:   Uint32, // Correctly defined as a 32-bit integer
 }

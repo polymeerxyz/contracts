@@ -41,16 +41,12 @@ pub fn program_entry() -> i8 {
 }
 
 fn entry() -> Result<(), Error> {
-    // 1. Load all necessary data from the transaction into a context struct.
     let context = load_context()?;
 
-    // 2. Verify the claimant is on the list using the Merkle proof.
     verify_merkle_proof(&context.dist_data, &context.witness)?;
 
-    // 3. Verify the input Proof Cell is valid and consistent.
     verify_proof_cell(&context.dist_data, &context.witness)?;
 
-    // 4. Verify the outputs are correctly structured and funded.
     verify_outputs(&context)?;
 
     Ok(())
@@ -152,7 +148,7 @@ fn verify_proof_cell(
 /// Verifies the transaction's outputs (Reward Cell and new Distribution Shard Cell).
 fn verify_outputs(context: &VmContext) -> Result<(), Error> {
     let input_dist_cell = load_cell(0, Source::GroupInput)?;
-    let input_capacity = input_dist_cell.capacity().unpack();
+    let input_capacity: u64 = input_dist_cell.capacity().unpack();
     let reward_amount = context.dist_data.uniform_reward_amount().unpack();
 
     // Check if this is the final claim (no capacity left for another reward)
@@ -170,6 +166,8 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
     let mut reward_cell_found = false;
     let mut new_dist_cell_found = false;
 
+    let script_hash = context.script.calc_script_hash();
+
     for i in 0..total_output_count {
         let output_lock_hash = load_cell_lock_hash(i, Source::Output)?;
 
@@ -178,11 +176,12 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
                 Err(BizError::InvalidClaimTransaction)?;
             }
             let reward_cell = load_cell(i, Source::Output)?;
-            if reward_cell.capacity().unpack() != reward_amount {
+            let reward_cell_capacity: u64 = reward_cell.capacity().unpack();
+            if reward_cell_capacity != reward_amount {
                 Err(BizError::InvalidRewardAmount)?;
             }
             reward_cell_found = true;
-        } else if output_lock_hash == context.script.calc_script_hash().as_slice() {
+        } else if output_lock_hash == script_hash.as_slice() {
             if is_final_claim {
                 Err(BizError::InvalidFinalClaim)?;
             }
@@ -204,7 +203,8 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
             }
 
             let output_cell = load_cell(i, Source::Output)?;
-            if output_cell.capacity().unpack() != input_capacity - reward_amount {
+            let output_cell_capacity: u64 = output_cell.capacity().unpack();
+            if output_cell_capacity != input_capacity - reward_amount {
                 Err(BizError::InvalidShardCapacity)?;
             }
             new_dist_cell_found = true;

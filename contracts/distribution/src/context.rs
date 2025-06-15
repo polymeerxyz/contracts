@@ -10,13 +10,14 @@ use crate::error::{BizError, Error};
 
 pub struct VmContext {
     pub dist_data: DistributionCellData,
-    pub witness: ClaimWitness,
     pub script: Script,
+    pub witness: ClaimWitness,
 }
 
 pub fn load_context() -> Result<VmContext, Error> {
-    // This is a Lock Script, so the cell it's protecting is at index 0 of its group.
     let script = load_script()?;
+
+    // This is a Lock Script, so the cell it's protecting is at index 0 of its group.
     let dist_cell_data_bytes = load_cell_data(0, Source::GroupInput)?;
     let witness_bytes = load_witness_args(0, Source::GroupInput)?;
 
@@ -27,7 +28,7 @@ pub fn load_context() -> Result<VmContext, Error> {
 
     Ok(VmContext {
         dist_data,
-        witness,
         script,
+        witness,
     })
 }

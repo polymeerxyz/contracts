@@ -1,6 +1,6 @@
 import base;
 
-table VaultCellData {
+struct VaultCellData {
     // A unique identifier for the campaign.
     campaign_id:                   Byte32,
     

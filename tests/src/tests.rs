@@ -200,14 +200,8 @@ fn test_proof() {
     let type_script = context
         .build_script(&contract_out_point, Bytes::new())
         .expect("script");
-
     let lock_script_hash = Byte32::from_slice(lock_script.calc_script_hash().as_slice()).unwrap();
-    let campaign_id = Byte32::from_slice(&[2; 32]).unwrap();
-    let proof_data = populate_proof_data(&lock_script_hash, &campaign_id);
-    let sample = hex_string(&proof_data.as_bytes());
-    println!("proof_data: {}", sample);
     let type_args = calculate_type_id(&input, 0);
-
     let outputs = vec![
         // proof cell
         CellOutput::new_builder()
@@ -231,8 +225,9 @@ fn test_proof() {
     ];
 
     // prepare outputs data
+    let campaign_id = Byte32::from_slice(&[2; 32]).unwrap();
+    let proof_data = populate_proof_data(&lock_script_hash, &campaign_id);
     let outputs_data = [proof_data.as_bytes(), Bytes::from("")];
-    println!("outputs_data: {:?}", outputs_data);
 
     // build transaction
     let witness_args = WitnessArgs::new_builder().build();
@@ -387,11 +382,7 @@ fn test_vault() {
 
 #[test]
 fn test_proof_data() {
-    let proof_data_raw = "9400000014000000340000005400000074000000412d494f4b3049664d504c502d61754856315963390000000000000000000000422d494f4b3049664d504c502d61754856315963390000000000000000000000432d494f4b3049664d504c502d617548563159633900000000000000000000004472b33b4e1845ebe82f2ce5f511bbe012f144c5f3d7b539909adffc83ccda61";
-    let proof_data = decode_hex::<ProofCellData>(proof_data_raw).unwrap();
-
-    println!("proof_data: {:?}", proof_data.entity_id());
-    println!("proof_data: {:?}", proof_data.campaign_id());
-    println!("proof_data: {:?}", proof_data.proof());
-    println!("proof_data: {:?}", proof_data.subscriber_lock_hash());
+    let proof_data_raw = "78a65fe089399eed9edcc4363d52e7b81ae64b806bfc215bef4cac02c8c3182fd733d666c2454834fe42de9e585d83011d63cf578dab5e451b62e32a889feeeaacbdf8e03f6547bb67a4ebfd485c34cda7ea6b940a48d25ba349e7e27ef5e8f74472b33b4e1845ebe82f2ce5f511bbe012f144c5f3d7b539909adffc83ccda61";
+    let proof_data = decode_hex::<ProofCellData>(proof_data_raw);
+    assert!(proof_data.is_ok());
 }

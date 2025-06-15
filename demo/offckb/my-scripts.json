@@ -18,13 +18,13 @@
   },
   "testnet": {
     "proof": {
-      "codeHash": "0xbe424eb48712147d0d88689bc60ec03dccb80e2367a6d4f2c5b9bc4390178be6",
+      "codeHash": "0x24807d6143e42072f2d0a4e4add1b61a6c169d5882da7b48a9fd7225b13d651b",
       "hashType": "data1",
       "cellDeps": [
         {
           "cellDep": {
             "outPoint": {
-              "txHash": "0x989aa39bb5664e46b157423fb07de14f2d111632cf09af5a7aaf5576774ddf4a",
+              "txHash": "0x3d10dd0f1722323e4de728413cf0ecbca07999332a45cbe3798d99e73fc5538c",
               "index": 0
             },
             "depType": "code"

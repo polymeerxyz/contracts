@@ -20,7 +20,7 @@ use ckb_std::{
     ckb_types::prelude::*,
     high_level::{
         load_cell, load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type_hash,
-        load_script, QueryIter,
+        QueryIter,
     },
 };
 use common::{
@@ -41,6 +41,8 @@ pub fn program_entry() -> i8 {
 }
 
 fn entry() -> Result<(), Error> {
+    let context = load_context()?;
+
     let inputs_count = QueryIter::new(load_cell, Source::GroupInput).count();
     let outputs_count = QueryIter::new(load_cell, Source::GroupOutput).count();
 
@@ -48,12 +50,9 @@ fn entry() -> Result<(), Error> {
         // Case 1: Consumption (Distribution or Refund)
         // One vault cell is being spent, and no new one is created.
         (1, 0) => {
-            let context = load_context()?;
-
             // Determine the action being performed by inspecting the outputs.
             // The code hash of the Distribution contract must be passed in this Type Script's args.
-            let script = load_script()?;
-            let args = script.args();
+            let args = context.script.args();
             if args.raw_data().len() != 32 {
                 Err(BizError::InvalidArgumentLength)?;
             }
@@ -78,7 +77,7 @@ fn entry() -> Result<(), Error> {
         }
         // Case 2: Creation
         // One vault cell is being created.
-        (0, 1) => verify_creation(),
+        (0, 1) => verify_creation(&context),
         // All other transaction structures are invalid for a Vault Cell.
         _ => Err(BizError::InvalidVaultTransaction)?,
     }
@@ -114,7 +113,7 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
     for i in 0..output_count {
         let output_cell = load_cell(i, Source::Output)?;
         let output_lock = output_cell.lock();
-        let output_capacity = output_cell.capacity().unpack();
+        let output_capacity: u64 = output_cell.capacity().unpack();
 
         if output_lock.code_hash().as_slice() == dist_lock_code_hash {
             // This is a Distribution Shard Cell.
@@ -219,15 +218,16 @@ fn verify_refund(context: &VmContext) -> Result<(), Error> {
     let mut new_vault_found = false;
 
     // Get the script hash of the vault's type script to identify a new vault cell.
-    let self_script_hash = load_script()?.calc_script_hash();
+    let script_hash = context.script.calc_script_hash();
 
     for i in 0..output_count {
         let output_cell = load_cell(i, Source::Output)?;
+        let output_cell_capacity: u64 = output_cell.capacity().unpack();
 
         // Check if this output is a new Vault Cell by checking its type script hash.
         let output_type_hash = load_cell_type_hash(i, Source::Output)?;
 
-        if output_type_hash.is_some() && output_type_hash.unwrap() == self_script_hash.unpack() {
+        if output_type_hash.is_some() && output_type_hash.unwrap() == script_hash.as_slice() {
             // --- THIS IS A NEW VAULT CELL (PARTIAL REFUND) ---
             if new_vault_found {
                 // There can be at most one new Vault Cell.
@@ -248,7 +248,7 @@ fn verify_refund(context: &VmContext) -> Result<(), Error> {
                 Err(BizError::InvalidVaultDataUpdate)?;
             }
 
-            new_vault_capacity += output_cell.capacity().unpack();
+            new_vault_capacity += output_cell_capacity;
             new_vault_found = true;
         } else {
             // --- THIS IS NOT A NEW VAULT CELL, SO IT MUST BE THE REFUND CELL ---
@@ -257,7 +257,7 @@ fn verify_refund(context: &VmContext) -> Result<(), Error> {
                 // If it's not a new vault and not locked to the creator, it's an invalid output.
                 Err(BizError::InvalidRefundLockHash)?;
             }
-            total_refund_capacity += output_cell.capacity().unpack();
+            total_refund_capacity += output_cell_capacity;
         }
     }
 
@@ -271,7 +271,7 @@ fn verify_refund(context: &VmContext) -> Result<(), Error> {
     Ok(())
 }
 
-fn verify_creation() -> Result<(), Error> {
+fn verify_creation(context: &VmContext) -> Result<(), Error> {
     // 1. Check data structure validity.
     let vault_data_bytes = load_cell_data(0, Source::GroupOutput)?;
     let vault_data =
@@ -297,7 +297,7 @@ fn verify_creation() -> Result<(), Error> {
     }
 
     // 3. Check that the script arguments are correctly formatted (must be a 32-byte hash).
-    let args = load_script()?.args();
+    let args = context.script.args();
     if args.raw_data().len() != 32 {
         Err(BizError::InvalidArgumentLength)?;
     }
