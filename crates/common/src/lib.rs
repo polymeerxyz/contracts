@@ -2,11 +2,30 @@
 
 extern crate alloc;
 
-pub mod error;
-pub mod generated;
-pub mod merkle;
-pub mod type_id;
-pub mod utils;
-mod validation;
+pub const NULL_HASH: [u8; 32] = [0u8; 32];
 
-pub use validation::validate_proof_against_witness;
+pub mod conversion;
+pub mod error;
+pub mod utils;
+
+#[cfg(feature = "type_id")]
+pub mod type_id;
+
+mod generated;
+
+pub use generated::base;
+
+pub mod schema {
+    #![allow(clippy::all)]
+    #![allow(unknown_lints)]
+    #![allow(warnings)]
+
+    #[cfg(feature = "distribution")]
+    pub use crate::generated::distribution;
+
+    #[cfg(feature = "proof")]
+    pub use crate::generated::proof;
+
+    #[cfg(feature = "vault")]
+    pub use crate::generated::vault;
+}

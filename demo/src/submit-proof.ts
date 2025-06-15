@@ -1,58 +1,26 @@
-import { mol, Script, Signer, Transaction, WitnessArgs } from "@ckb-ccc/core";
-import { Checkpoint, ProofData, VerificationWitness } from "./type";
-import { MerkleTree } from "./merkle";
-import { logTx } from "./utils";
+import { Script, Signer, Transaction } from "@ckb-ccc/core";
+import { ProofData } from "./type";
+import { logTx, generateTypeId, hashStringToByte32 } from "./utils";
 import { getMyScript } from "./ccc-client";
-import { generateTypeId } from "./type-id";
 
 export async function submitProof(
   signer: Signer,
   lockScript: Script
 ): Promise<Transaction> {
-  const entityId = "C-IOK0IfMPLP-auHV1Yc9";
-  const campaignId = "CFYILSrG-3-yMK1Hssg0Z";
-
-  const checkpoints = [0, 1, 2, 3, 4, 5].map((i) => {
-    return {
-      timestamp: mol.Uint64.encode(1747302000000 + i * 1000000),
-      nonce: mol.Byte32.encode(
-        Buffer.from(`${i}`.padEnd(32, "\0")).toString("hex")
-      ),
-    };
-  });
-
-  const verificationWitness = VerificationWitness.encode({
-    entity_id: mol.Byte32.encode(
-      Buffer.from(entityId.padEnd(32, "\0")).toString("hex")
-    ),
-    campaign_id: mol.Byte32.encode(
-      Buffer.from(campaignId.padEnd(32, "\0")).toString("hex")
-    ),
-    checkpoint_messages: checkpoints,
-  });
-
-  const leaves = checkpoints.map((checkpoint) => {
-    return Checkpoint.encode({
-      timestamp: checkpoint.timestamp,
-      nonce: checkpoint.nonce,
-    });
-  });
-
-  const merkleRoot = MerkleTree.calculateMerkleRoot(leaves);
+  const entityId = hashStringToByte32("5ed61d69-cf14-49af-aead-5f9552cf4e81");
+  const campaignId = hashStringToByte32("2bdec373-e4bd-4d65-9963-0ebc0c4b967d");
+  const proof = hashStringToByte32("0b07a03b-5c8f-4c06-ad66-96e715bc51be");
 
   const proofData = ProofData.encode({
-    entity_id: mol.Byte32.encode(
-      Buffer.from(entityId.padEnd(32, "\0")).toString("hex")
-    ),
-    campaign_id: mol.Byte32.encode(
-      Buffer.from(campaignId.padEnd(32, "\0")).toString("hex")
-    ),
-    proof: mol.Byte32.encode(merkleRoot),
+    entity_id: entityId,
+    campaign_id: campaignId,
+    proof: proof,
+    subscriber_lock_hash: lockScript.hash(),
   });
 
-  const proof = getMyScript("proof");
+  const proofContract = getMyScript("proof");
 
-  let tx = Transaction.from({
+  const tx = Transaction.from({
     version: "0x0",
     headerDeps: [],
     outputs: [
@@ -62,7 +30,7 @@ export async function submitProof(
         // because it is automatically calculated by @ckb-ccc/core
         lock: lockScript,
         type: {
-          codeHash: proof.codeHash,
+          codeHash: proofContract.codeHash,
           hashType: "data1",
           // placeholder for type id will be replaced later
           args: "0x" + Buffer.from("".padEnd(32, "\0")).toString("hex"),
@@ -74,21 +42,16 @@ export async function submitProof(
       // no need to add secp256k1_blake160_sighash_all cell dep
       // because it is automatically added by @ckb-ccc/core
       {
-        outPoint: proof.cellDeps[0]!.cellDep.outPoint,
-        depType: proof.cellDeps[0]!.cellDep.depType,
+        outPoint: proofContract.cellDeps[0]!.cellDep.outPoint,
+        depType: proofContract.cellDeps[0]!.cellDep.depType,
       },
     ],
-    witnesses: [
-      // First witness will contain both user signature and verification data
-      WitnessArgs.encode({
-        inputType: verificationWitness,
-      }),
-    ],
+    witnesses: ["0x"],
   });
 
   await tx.completeFeeBy(signer);
 
-  let cellInput = tx.inputs[0];
+  const cellInput = tx.inputs[0];
   if (!cellInput) {
     throw new Error("No input found");
   }

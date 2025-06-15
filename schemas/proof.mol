@@ -1,0 +1,18 @@
+import base;
+
+struct ProofCellData {
+    // A unique identifier for the content that was consumed.
+    entity_id:            Byte32,
+
+    // A unique identifier for the campaign this proof belongs to.
+    campaign_id:          Byte32,
+
+    // The cryptographic proof of consumption.
+    // This is a hash of off-chain secret data.
+    proof:                Byte32,
+
+    // The lock hash of the subscriber who owns this proof.
+    // The Distribution contract will use this to ensure the reward
+    // goes to the correct person.
+    subscriber_lock_hash: Byte32,
+}

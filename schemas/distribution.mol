@@ -1,0 +1,40 @@
+import base;
+
+struct DistributionCellData {
+    // A unique identifier for the campaign this shard belongs to.
+    campaign_id:           Byte32,
+
+    // The index of this shard (e.g., 0, 1, 2...).
+    shard_id:              Uint32,
+
+    // The Merkle root hash of the list of claimants assigned to this shard.
+    merkle_root:           Byte32,
+
+    // The code hash of the platform's Proof Type Script.
+    proof_script_code_hash:    Byte32,
+
+    // The pre-calculated, uniform reward amount for every claimant.
+    // Stored in Shannons (1 CKB = 100,000,000 Shannons).
+    uniform_reward_amount: Uint64,
+}
+
+struct OutPoint {
+    tx_hash: Byte32,
+    index:   Uint32, // Correctly defined as a 32-bit integer
+}
+
+vector Byte32Vec <Byte32>;
+
+table ClaimWitness {
+    // The Merkle proof path needed to verify the claimant's inclusion.
+    // This is a list of sibling nodes from the leaf to the root.
+    merkle_proof:         Byte32Vec,
+
+    // The subscriber's lock hash, which must match the one used to generate the Merkle leaf.
+    // This is also used to identify the output reward cell.
+    subscriber_lock_hash: Byte32,
+
+    // The outpoint of the claimant's Proof Cell. This is used to
+    // reconstruct the Merkle leaf and ensure the correct Proof Cell is spent.
+    proof_cell_out_point: OutPoint,
+}

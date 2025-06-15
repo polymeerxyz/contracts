@@ -17,18 +17,12 @@ ckb_std::default_alloc!(16384, 1258306, 64);
 
 use ckb_std::{
     ckb_constants::Source,
-    error::SysError,
-    high_level::{
-        load_cell_data, load_cell_type_hash, load_script_hash, load_witness_args, QueryIter,
-    },
+    high_level::{load_cell, load_cell_data, load_cell_lock_hash, QueryIter},
+    type_id::check_type_id,
 };
-use common::{
-    generated::data::{ProofData, VerificationWitness},
-    type_id::{load_type_id_from_script_args, locate_type_id_output_index, validate_type_id},
-    validate_proof_against_witness,
-};
+use common::{schema::proof::ProofCellData, NULL_HASH};
 use molecule::prelude::Entity;
-use proof::error::{Error, ProofError};
+use proof::error::{BizError, Error};
 
 pub fn program_entry() -> i8 {
     match entry() {
@@ -38,52 +32,51 @@ pub fn program_entry() -> i8 {
 }
 
 fn entry() -> Result<(), Error> {
-    let type_id = load_type_id_from_script_args(0)?;
-    let current_script_hash = load_script_hash()?;
-    let output_index = locate_type_id_output_index(current_script_hash)?;
+    check_type_id(0)?;
 
-    validate_type_id(type_id, output_index)?;
+    let inputs_count = QueryIter::new(load_cell, Source::GroupInput).count();
+    let outputs_count = QueryIter::new(load_cell, Source::GroupOutput).count();
 
-    // Count cells with our type script
-    let inputs_count = count_cells_with_type_script(current_script_hash, Source::Input);
-    let outputs_count = count_cells_with_type_script(current_script_hash, Source::Output);
-
-    if inputs_count == 0 && outputs_count == 1 {
-        // CREATION CASE: Anyone can create one cell with proper data
-
-        validate_proof_creation(output_index)?;
-        Ok(())
-    } else if inputs_count == 1 && outputs_count == 0 {
-        // CONSUMPTION CASE: Anyone can consume
-
-        Ok(())
-    } else {
-        // TRANSFER CASE: Not allowed
-
-        Err(Error::Proof(ProofError::OperationNotAllowed))
+    match (inputs_count, outputs_count) {
+        (0, 1) => verify_creation(),
+        (1, 0) => verify_consumption(),
+        (1, 1) => Err(BizError::InvalidProofCellUpdate)?,
+        _ => Err(BizError::InvalidProofTransaction)?,
     }
 }
 
-fn count_cells_with_type_script(current_script_hash: [u8; 32], source: Source) -> usize {
-    QueryIter::new(load_cell_type_hash, source)
-        .flatten()
-        .filter(|script_hash| script_hash == &current_script_hash)
-        .count()
+fn verify_creation() -> Result<(), Error> {
+    // 1. Check data structure validity.
+    let proof_data_bytes = load_cell_data(0, Source::GroupOutput)?;
+    let proof_data =
+        ProofCellData::from_slice(&proof_data_bytes).map_err(|_| BizError::InvalidProofData)?;
+
+    // 2. Ensure critical identifier hashes are not null/empty.
+    if proof_data.entity_id().as_slice() == NULL_HASH {
+        Err(BizError::InvalidProofEntityId)?;
+    }
+
+    if proof_data.campaign_id().as_slice() == NULL_HASH {
+        Err(BizError::InvalidProofCampaignId)?;
+    }
+
+    if proof_data.proof().as_slice() == NULL_HASH {
+        Err(BizError::InvalidProofProof)?;
+    }
+
+    // 3. Check lock hash is correct.
+    let actual_lock_hash = load_cell_lock_hash(0, Source::GroupOutput)?;
+    if proof_data.subscriber_lock_hash().as_slice() != actual_lock_hash {
+        // We can reuse this error code as it indicates a mismatch related to the lock.
+        Err(BizError::InvalidSubscriberLockHash)?;
+    }
+
+    Ok(())
 }
 
-fn validate_proof_creation(index: usize) -> Result<(), Error> {
-    let cell_ouput_data = load_cell_data(index, Source::Output)?;
-    let proof_data =
-        &ProofData::from_slice(&cell_ouput_data).map_err(|_| Error::Sys(SysError::Encoding))?;
-
-    let verification_witness = QueryIter::new(load_witness_args, Source::Input)
-        .find_map(|witness_args| {
-            witness_args
-                .input_type()
-                .to_opt()
-                .and_then(|input_type| VerificationWitness::from_slice(&input_type.raw_data()).ok())
-        })
-        .ok_or(Error::Proof(ProofError::VerificationWitnessNotFound))?;
-    validate_proof_against_witness(&verification_witness, proof_data)?;
+fn verify_consumption() -> Result<(), Error> {
+    // When a Proof Cell is consumed, we don't need additional validation
+    // beyond what's already enforced by the transaction structure checks.
+    // The cell is being destroyed, which is allowed.
     Ok(())
 }
