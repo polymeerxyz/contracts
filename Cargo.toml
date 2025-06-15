@@ -19,7 +19,6 @@ codegen-units = 1
 debug = true
 
 [workspace.dependencies]
-cc = "1.2.21"
 ckb-gen-types = "0.202.0"
 ckb-hash = { version = "0.202.0", default-features = false }
 ckb-std = "0.17.2"

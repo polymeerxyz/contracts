@@ -31,7 +31,7 @@ fn locate_first_type_id_output_index() -> Result<usize, Error> {
     QueryIter::new(load_cell_type_hash, Source::Output)
         .flatten()
         .position(|type_hash| type_hash == current_script_hash)
-        .ok_or(Error::InvalidArgumentScriptHash)
+        .ok_or(Error::MissingScriptHash)
 }
 
 /// Given a 32-byte type id, this function validates if
@@ -54,7 +54,7 @@ pub fn validate_type_id(type_id: [u8; 32]) -> Result<(), Error> {
 
         if calculated_type_id != type_id {
             debug!("Invalid Type ID!");
-            return Err(Error::InvalidArgumentScriptHash);
+            return Err(Error::InvalidScriptHash);
         }
     }
     Ok(())
@@ -65,20 +65,17 @@ pub fn validate_type_id(type_id: [u8; 32]) -> Result<(), Error> {
 pub fn load_type_id_from_script_args(offset: usize) -> Result<[u8; 32], Error> {
     let script = load_script()?;
     let args = script.args();
-    if offset + 32 > args.len() {
-        debug!(
-            "Type script args length is not 32 bytes, found: {}",
-            args.len() - offset
-        );
+    if offset + 32 > args.raw_data().len() {
+        debug!("Length of type id is incorrect!");
         return Err(Error::InvalidArgumentLength);
     }
     let mut ret = [0; 32];
-    ret.copy_from_slice(&args.as_slice()[offset..offset + 32]);
+    ret.copy_from_slice(&args.raw_data()[offset..offset + 32]);
     Ok(ret)
 }
 
 // Calculate the type id of a cell input
-fn calculate_type_id(cell_input: &CellInput, index: usize) -> [u8; 32] {
+pub fn calculate_type_id(cell_input: &CellInput, index: usize) -> [u8; 32] {
     let mut blake2b = new_blake2b();
     blake2b.update(cell_input.as_slice());
     blake2b.update(&index.to_le_bytes());
@@ -99,16 +96,12 @@ mod tests {
 
     #[test]
     fn test_generate_type_id() {
-        let expected_type_id =
-            hex_to_vec("3faa70b96d101b802b6f8720fb24ff38612f769ac51a50653815c83073fc8b5d");
-
-        let index: usize = 0;
         let cell_input = CellInput::new_builder()
             .previous_output(
                 OutPoint::new_builder()
                     .tx_hash(
                         decode_hex(
-                            "bd0780bad3363818d9f227aaf5c71c33ed436b03f2f8aade5ff4dfdf5249da65",
+                            "0922239874bc02e3271bd91e36a7d010339b12e9d0624c8f4703219f3baf0e92",
                         )
                         .unwrap(),
                     )
@@ -118,7 +111,11 @@ mod tests {
             .since(Uint64::from_slice(vec![0; 8].as_slice()).unwrap())
             .build();
 
+        let index: usize = 0;
         let type_id = calculate_type_id(&cell_input, index);
+        let expected_type_id =
+            hex_to_vec("e1348ad4a1a9b38c29ef70e8eb3a723a66f531fccb5a1d3d5489bb68f15d581a");
+
         assert_eq!(type_id, expected_type_id.as_slice());
     }
 }

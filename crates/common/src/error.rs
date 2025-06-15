@@ -1,5 +1,6 @@
 use ckb_std::error::SysError;
 
+#[derive(Debug)]
 #[repr(i8)]
 pub enum Error {
     IndexOutOfBound = 1,
@@ -9,7 +10,8 @@ pub enum Error {
 
     InvalidArgumentCount = 10,
     InvalidArgumentLength,
-    InvalidArgumentScriptHash,
+    InvalidScriptHash,
+    MissingScriptHash,
 }
 
 impl From<SysError> for Error {

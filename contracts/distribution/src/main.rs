@@ -24,10 +24,13 @@ use ckb_std::{
         QueryIter,
     },
 };
-use common::schema::{ClaimWitness, DistributionCellData, ProofCellData};
+use common::schema::{
+    distribution::{ClaimWitness, DistributionCellData},
+    proof::ProofCellData,
+};
 use distribution::{
     context::{load_context, VmContext},
-    error::Error,
+    error::{BizError, Error},
 };
 
 pub fn program_entry() -> i8 {
@@ -70,7 +73,7 @@ fn verify_merkle_proof(
         // Validate sibling hash is not all zeros (invalid hash)
         let is_valid_hash = sibling_hash.as_slice().iter().any(|&b| b != 0);
         if !is_valid_hash {
-            return Err(Error::InvalidMerkleProof);
+            Err(BizError::InvalidMerkleProof)?;
         }
 
         // Compute parent hash by concatenating and hashing the two child hashes
@@ -87,7 +90,7 @@ fn verify_merkle_proof(
 
     // Final computed hash must match the merkle root in the distribution cell
     if computed_hash != dist_data.merkle_root().as_slice() {
-        return Err(Error::InvalidMerkleProof);
+        Err(BizError::InvalidMerkleProof)?;
     }
 
     Ok(())
@@ -114,33 +117,33 @@ fn verify_proof_cell(
 
     // Ensure exactly one proof cell is being spent
     if proof_cell_count != 1 {
-        return Err(Error::InvalidProofCellCount);
+        Err(BizError::InvalidProofCellCount)?;
     }
 
-    let index = proof_cell_input_index.ok_or(Error::MissingProofCell)?;
+    let index = proof_cell_input_index.ok_or(BizError::MissingProofCell)?;
 
     // Check 1: The OutPoint in the witness must match the actual OutPoint being spent.
     let actual_proof_outpoint = load_input_out_point(index, Source::Input)?;
     if actual_proof_outpoint.as_bytes() != witness.proof_cell_out_point().as_bytes() {
-        return Err(Error::InvalidMerkleProof);
+        Err(BizError::InvalidMerkleProof)?;
     }
 
     // Check 2: Inspect the Proof Cell's internal data for consistency.
     let proof_cell_data_bytes = load_cell_data(index, Source::Input)?;
-    let proof_data =
-        ProofCellData::from_slice(&proof_cell_data_bytes).map_err(|_| Error::InvalidProofData)?;
+    let proof_data = ProofCellData::from_slice(&proof_cell_data_bytes)
+        .map_err(|_| BizError::InvalidProofData)?;
 
     if proof_data.campaign_id().as_bytes() != dist_data.campaign_id().as_bytes() {
-        return Err(Error::InvalidCampaignId);
+        Err(BizError::InvalidCampaignId)?;
     }
     if proof_data.subscriber_lock_hash().as_bytes() != witness.subscriber_lock_hash().as_bytes() {
-        return Err(Error::InvalidSubscriberLockHash);
+        Err(BizError::InvalidSubscriberLockHash)?;
     }
 
     // Check 3: Verify the proof cell's lock hash matches the subscriber's lock hash
     let proof_cell_lock_hash = load_cell_lock_hash(index, Source::Input)?;
     if proof_cell_lock_hash != witness.subscriber_lock_hash().as_slice() {
-        return Err(Error::InvalidProofLockHash);
+        Err(BizError::InvalidProofLockHash)?;
     }
 
     Ok(())
@@ -161,7 +164,7 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
     let total_output_count = QueryIter::new(load_cell, Source::Output).count();
 
     if total_output_count != expected_output_count {
-        return Err(Error::InvalidClaimTransaction);
+        Err(BizError::InvalidClaimTransaction)?;
     }
 
     let mut reward_cell_found = false;
@@ -172,49 +175,49 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
 
         if output_lock_hash == context.witness.subscriber_lock_hash().as_slice() {
             if reward_cell_found {
-                return Err(Error::InvalidClaimTransaction);
+                Err(BizError::InvalidClaimTransaction)?;
             }
             let reward_cell = load_cell(i, Source::Output)?;
             if reward_cell.capacity().unpack() != reward_amount {
-                return Err(Error::InvalidRewardAmount);
+                Err(BizError::InvalidRewardAmount)?;
             }
             reward_cell_found = true;
         } else if output_lock_hash == context.script.calc_script_hash().as_slice() {
             if is_final_claim {
-                return Err(Error::InvalidFinalClaim);
+                Err(BizError::InvalidFinalClaim)?;
             }
             if new_dist_cell_found {
-                return Err(Error::InvalidClaimTransaction);
+                Err(BizError::InvalidClaimTransaction)?;
             }
 
             // Verify the new shard cell is a perfect, capacity-reduced clone.
             let input_type_hash = load_cell_type_hash(0, Source::GroupInput)?;
             let output_type_hash = load_cell_type_hash(i, Source::Output)?;
             if input_type_hash != output_type_hash {
-                return Err(Error::InvalidTypeScriptUpdate);
+                Err(BizError::InvalidTypeScriptUpdate)?;
             }
 
             let input_data = load_cell_data(0, Source::GroupInput)?;
             let output_data = load_cell_data(i, Source::Output)?;
             if input_data != output_data {
-                return Err(Error::InvalidShardDataUpdate);
+                Err(BizError::InvalidShardDataUpdate)?;
             }
 
             let output_cell = load_cell(i, Source::Output)?;
             if output_cell.capacity().unpack() != input_capacity - reward_amount {
-                return Err(Error::InvalidShardCapacity);
+                Err(BizError::InvalidShardCapacity)?;
             }
             new_dist_cell_found = true;
         } else {
-            return Err(Error::InvalidClaimTransaction);
+            Err(BizError::InvalidClaimTransaction)?;
         }
     }
 
     if !reward_cell_found {
-        return Err(Error::MissingRewardCell);
+        Err(BizError::MissingRewardCell)?;
     }
     if !is_final_claim && !new_dist_cell_found {
-        return Err(Error::InvalidClaimTransaction);
+        Err(BizError::InvalidClaimTransaction)?;
     }
 
     Ok(())

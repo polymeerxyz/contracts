@@ -1,14 +1,17 @@
 use ckb_std::error::SysError;
 use common::error::Error as CommonError;
 
-#[repr(i8)]
+#[derive(Debug)]
 pub enum Error {
-    IndexOutOfBound = 1,
-    ItemMissing,
-    LengthNotEnough,
-    Encoding,
+    Sys(SysError),
+    Biz(BizError),
+    Common(CommonError),
+}
 
-    InvalidCampaignId = 100,
+#[derive(Debug)]
+#[repr(i8)]
+pub enum BizError {
+    InvalidCampaignId = 20,
     InvalidClaimTransaction,
     InvalidDistributionData,
     InvalidFinalClaim,
@@ -25,33 +28,38 @@ pub enum Error {
     InvalidWitnessData,
     MissingProofCell,
     MissingRewardCell,
-
-    External(i8),
 }
 
 impl From<SysError> for Error {
     fn from(err: SysError) -> Self {
-        match err {
-            SysError::IndexOutOfBound => Self::IndexOutOfBound,
-            SysError::ItemMissing => Self::ItemMissing,
-            SysError::LengthNotEnough(_) => Self::LengthNotEnough,
-            SysError::Encoding => Self::Encoding,
-            _ => panic!("unexpected sys error"),
-        }
+        Error::Sys(err)
+    }
+}
+
+impl From<BizError> for Error {
+    fn from(err: BizError) -> Self {
+        Error::Biz(err)
     }
 }
 
 impl From<CommonError> for Error {
     fn from(err: CommonError) -> Self {
-        Self::External(err as i8)
+        Self::Common(err)
     }
 }
 
 impl From<Error> for i8 {
     fn from(err: Error) -> i8 {
         match err {
-            Error::External(v) => v,
-            _ => i8::from(err),
+            Error::Sys(v) => match v {
+                SysError::IndexOutOfBound => 1,
+                SysError::ItemMissing => 2,
+                SysError::LengthNotEnough(_) => 3,
+                SysError::Encoding => 4,
+                _ => panic!("unexpected sys error"),
+            },
+            Error::Biz(v) => v as i8,
+            Error::Common(v) => v as i8,
         }
     }
 }

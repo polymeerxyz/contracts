@@ -4,9 +4,11 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-common = { path = "../../crates/common", features = ["proof", "type_id"] }
+common = { path = "../../crates/common", default-features = false, features = [
+  "proof",
+] }
 ckb-hash = { workspace = true, features = ["ckb-contract"] }
-ckb-std.workspace = true
+ckb-std = { workspace = true, features = ["type-id"] }
 molecule = { workspace = true, features = ["bytes_vec"] }
 
 [features]

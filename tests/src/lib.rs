@@ -13,7 +13,9 @@ use std::fs;
 use std::path::PathBuf;
 use std::str::FromStr;
 
-mod data;
+pub mod data;
+pub mod util;
+
 #[cfg(test)]
 mod tests;
 

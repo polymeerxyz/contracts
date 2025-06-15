@@ -3,10 +3,10 @@ use ckb_std::{
     ckb_types::prelude::Unpack,
     high_level::{load_cell, load_cell_data, load_cell_lock_hash},
 };
-use common::schema::VaultCellData;
+use common::schema::vault::VaultCellData;
 use molecule::prelude::Entity;
 
-use crate::error::Error;
+use crate::error::{BizError, Error};
 
 pub struct VmContext {
     pub vault_data: VaultCellData,
@@ -20,7 +20,7 @@ pub fn load_context() -> Result<VmContext, Error> {
     let vault_data_bytes = load_cell_data(0, Source::GroupInput)?;
 
     let vault_data =
-        VaultCellData::from_slice(&vault_data_bytes).map_err(|_| Error::InvalidDataStructure)?;
+        VaultCellData::from_slice(&vault_data_bytes).map_err(|_| BizError::InvalidDataStructure)?;
 
     let admin_lock_hash = load_cell_lock_hash(0, Source::GroupInput)?;
 

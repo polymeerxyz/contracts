@@ -3,10 +3,10 @@ use ckb_std::{
     ckb_types::packed::Script,
     high_level::{load_cell_data, load_script, load_witness_args},
 };
-use common::schema::{ClaimWitness, DistributionCellData};
+use common::schema::distribution::{ClaimWitness, DistributionCellData};
 use molecule::prelude::Entity;
 
-use crate::error::Error;
+use crate::error::{BizError, Error};
 
 pub struct VmContext {
     pub dist_data: DistributionCellData,
@@ -21,9 +21,9 @@ pub fn load_context() -> Result<VmContext, Error> {
     let witness_bytes = load_witness_args(0, Source::GroupInput)?;
 
     let dist_data = DistributionCellData::from_slice(&dist_cell_data_bytes)
-        .map_err(|_| Error::InvalidDistributionData)?;
+        .map_err(|_| BizError::InvalidDistributionData)?;
     let witness = ClaimWitness::from_slice(witness_bytes.as_slice())
-        .map_err(|_| Error::InvalidWitnessData)?;
+        .map_err(|_| BizError::InvalidWitnessData)?;
 
     Ok(VmContext {
         dist_data,

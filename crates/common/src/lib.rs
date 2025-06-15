@@ -11,17 +11,21 @@ pub mod utils;
 #[cfg(feature = "type_id")]
 pub mod type_id;
 
-pub mod base {
-    include!(concat!(env!("OUT_DIR"), "/base.rs"));
-}
+mod generated;
+
+pub use generated::base;
 
 pub mod schema {
+    #![allow(clippy::all)]
+    #![allow(unknown_lints)]
+    #![allow(warnings)]
+
     #[cfg(feature = "distribution")]
-    include!(concat!(env!("OUT_DIR"), "/distribution.rs"));
+    pub use crate::generated::distribution;
 
     #[cfg(feature = "proof")]
-    include!(concat!(env!("OUT_DIR"), "/proof.rs"));
+    pub use crate::generated::proof;
 
     #[cfg(feature = "vault")]
-    include!(concat!(env!("OUT_DIR"), "/vault.rs"));
+    pub use crate::generated::vault;
 }
