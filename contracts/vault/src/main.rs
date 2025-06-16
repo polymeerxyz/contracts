@@ -20,7 +20,7 @@ use ckb_std::{
     ckb_types::prelude::*,
     high_level::{
         load_cell, load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type_hash,
-        QueryIter,
+        load_script, QueryIter,
     },
 };
 use common::{
@@ -41,15 +41,13 @@ pub fn program_entry() -> i8 {
 }
 
 fn entry() -> Result<(), Error> {
-    let context = load_context()?;
-
     let inputs_count = QueryIter::new(load_cell, Source::GroupInput).count();
     let outputs_count = QueryIter::new(load_cell, Source::GroupOutput).count();
 
     match (inputs_count, outputs_count) {
-        // Case 1: Consumption (Distribution or Refund)
-        // One vault cell is being spent, and no new one is created.
         (1, 0) => {
+            let context = load_context()?;
+
             // Determine the action being performed by inspecting the outputs.
             // The code hash of the Distribution contract must be passed in this Type Script's args.
             let args = context.script.args();
@@ -75,10 +73,7 @@ fn entry() -> Result<(), Error> {
                 verify_refund(&context)
             }
         }
-        // Case 2: Creation
-        // One vault cell is being created.
-        (0, 1) => verify_creation(&context),
-        // All other transaction structures are invalid for a Vault Cell.
+        (0, 1) => verify_creation(),
         _ => Err(BizError::InvalidVaultTransaction)?,
     }
 }
@@ -271,7 +266,7 @@ fn verify_refund(context: &VmContext) -> Result<(), Error> {
     Ok(())
 }
 
-fn verify_creation(context: &VmContext) -> Result<(), Error> {
+fn verify_creation() -> Result<(), Error> {
     // 1. Check data structure validity.
     let vault_data_bytes = load_cell_data(0, Source::GroupOutput)?;
     let vault_data =
@@ -297,7 +292,8 @@ fn verify_creation(context: &VmContext) -> Result<(), Error> {
     }
 
     // 3. Check that the script arguments are correctly formatted (must be a 32-byte hash).
-    let args = context.script.args();
+    let script = load_script()?;
+    let args = script.args();
     if args.raw_data().len() != 32 {
         Err(BizError::InvalidArgumentLength)?;
     }

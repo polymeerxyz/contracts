@@ -147,12 +147,10 @@ fn verify_proof_cell(
 
 /// Verifies the transaction's outputs (Reward Cell and new Distribution Shard Cell).
 fn verify_outputs(context: &VmContext) -> Result<(), Error> {
-    let input_dist_cell = load_cell(0, Source::GroupInput)?;
-    let input_capacity: u64 = input_dist_cell.capacity().unpack();
     let reward_amount = context.dist_data.uniform_reward_amount().unpack();
 
     // Check if this is the final claim (no capacity left for another reward)
-    let is_final_claim = input_capacity == reward_amount;
+    let is_final_claim = context.dist_capacity == reward_amount;
 
     // For final claim: only reward cell
     // For normal claim: reward cell + new distribution cell
@@ -204,7 +202,7 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
 
             let output_cell = load_cell(i, Source::Output)?;
             let output_cell_capacity: u64 = output_cell.capacity().unpack();
-            if output_cell_capacity != input_capacity - reward_amount {
+            if output_cell_capacity != context.dist_capacity - reward_amount {
                 Err(BizError::InvalidShardCapacity)?;
             }
             new_dist_cell_found = true;
