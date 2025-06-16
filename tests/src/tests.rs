@@ -1,5 +1,8 @@
 use crate::{
-    data::{self, populate_claim_witness, populate_proof_data, populate_vault_data},
+    data::{
+        self, populate_claim_witness, populate_distribution_data, populate_proof_data,
+        populate_vault_data,
+    },
     util, Loader,
 };
 use ckb_testtool::{
@@ -321,8 +324,8 @@ fn test_create_vault() {
 
     // build transaction
     let tx = TransactionBuilder::default()
-        .cell_dep(vault_cell_dep)
         .cell_dep(always_success_dep)
+        .cell_dep(vault_cell_dep)
         .input(input)
         .output(vault_output)
         .output(change_output)
@@ -341,137 +344,145 @@ fn test_create_vault() {
 }
 
 #[test]
-fn test_spend_vault_and_create_distribution() {
-    // // 1. Setup: deploy contracts, prepare scripts
-    // let mut context = Context::default();
-    // let vault_bin = Loader::default().load_binary("vault");
-    // let vault_out_point = context.deploy_cell(vault_bin);
-    // let vault_script_dep = CellDep::new_builder()
-    //     .out_point(vault_out_point.clone())
-    //     .build();
+fn test_spend_vault() {
+    // deploy contracts, prepare scripts
+    let mut context = Context::default();
+    let vault_bin = Loader::default().load_binary("vault");
+    let vault_out_point = context.deploy_cell(vault_bin);
+    let vault_script_dep = CellDep::new_builder()
+        .out_point(vault_out_point.clone())
+        .build();
 
-    // let dist_bin = Loader::default().load_binary("distribution");
-    // let dist_out_point = context.deploy_cell(dist_bin.clone());
-    // let dist_script_dep = CellDep::new_builder()
-    //     .out_point(dist_out_point.clone())
-    //     .build();
+    let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let always_success_dep = CellDep::new_builder()
+        .out_point(always_success_out_point.clone())
+        .build();
+
+    let dist_bin = Loader::default().load_binary("distribution");
+    let dist_out_point = context.deploy_cell(dist_bin.clone());
+    let dist_script_dep = CellDep::new_builder()
+        .out_point(dist_out_point.clone())
+        .build();
     // let dist_code_hash =
     //     Byte32::from_slice(CellOutput::calc_data_hash(&dist_bin).as_slice()).unwrap();
 
-    // let proof_bin = Loader::default().load_binary("proof");
-    // let proof_code_hash =
-    //     Byte32::from_slice(CellOutput::calc_data_hash(&proof_bin).as_slice()).unwrap();
+    let proof_bin = Loader::default().load_binary("proof");
+    let proof_code_hash =
+        Byte32::from_slice(CellOutput::calc_data_hash(&proof_bin).as_slice()).unwrap();
 
-    // let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
-    // let always_success_dep = CellDep::new_builder()
-    //     .out_point(always_success_out_point.clone())
-    //     .build();
+    // code hash
+    let dist_lock_template = context
+        .build_script(&dist_out_point, Default::default())
+        .unwrap();
+    // This is the true code_hash that the context will use for this script.
+    let dist_code_hash = dist_lock_template.code_hash();
 
-    // let admin_lock_script = context
-    //     .build_script(&always_success_out_point, Bytes::from(vec![1]))
-    //     .unwrap();
-    // let creator_lock_script = context
-    //     .build_script(&always_success_out_point, Bytes::from(vec![2]))
-    //     .unwrap();
-    // let creator_lock_hash =
-    //     Byte32::from_slice(creator_lock_script.calc_script_hash().as_slice()).unwrap();
+    // lock scripts
+    let admin_lock_script = context
+        .build_script(&always_success_out_point, Bytes::from(vec![1]))
+        .unwrap();
+    let creator_lock_script = context
+        .build_script(&always_success_out_point, Bytes::from(vec![2]))
+        .unwrap();
+    let creator_lock_hash =
+        Byte32::from_slice(creator_lock_script.calc_script_hash().as_slice()).unwrap();
 
-    // // 2. Prepare input: Vault Cell
-    // let vault_capacity = 10000 * 100_000_000u64; // 10000 CKB
-    // let fee_percentage = 500u16; // 5.00%
-    // let campaign_id = Byte32::from_slice(&[1; 32]).unwrap();
+    // prepare input
+    let vault_capacity = 10000 * 100_000_000u64; // 10000 CKB
+    let fee_percentage = 500u16; // 5.00%
+    let campaign_id = Byte32::from_slice(&[1; 32]).unwrap();
 
-    // let vault_data = populate_vault_data(
-    //     &campaign_id,
-    //     &creator_lock_hash,
-    //     &proof_code_hash,
-    //     fee_percentage,
-    // );
+    let vault_data = populate_vault_data(
+        &campaign_id,
+        &creator_lock_hash,
+        &proof_code_hash,
+        fee_percentage,
+    );
 
-    // let vault_type_script = context
-    //     .build_script(&vault_out_point, dist_code_hash.as_bytes())
-    //     .unwrap();
+    let vault_type_script = context
+        .build_script(&vault_out_point, dist_code_hash.as_bytes())
+        .unwrap();
 
-    // let vault_input_out_point = context.create_cell(
-    //     CellOutput::new_builder()
-    //         .capacity(vault_capacity.pack())
-    //         .lock(admin_lock_script.clone())
-    //         .type_(Some(vault_type_script).pack())
-    //         .build(),
-    //     vault_data.as_bytes(),
-    // );
-    // let vault_input = CellInput::new_builder()
-    //     .previous_output(vault_input_out_point)
-    //     .build();
+    let vault_input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(vault_capacity.pack())
+            .lock(admin_lock_script.clone())
+            .type_(Some(vault_type_script).pack())
+            .build(),
+        vault_data.as_bytes(),
+    );
+    let vault_input = CellInput::new_builder()
+        .previous_output(vault_input_out_point)
+        .build();
 
-    // // 3. Prepare outputs: Distribution Shards and Fee Cell
-    // let dist_lock_script = context
-    //     .build_script(&dist_out_point, Default::default())
-    //     .unwrap();
-    // let uniform_reward_amount = 95 * 100_000_000u64; // 95 CKB
-    // let merkle_root = [0u8; 32];
+    // prepare outputs
+    let dist_lock_script = context
+        .build_script(&dist_out_point, Default::default())
+        .unwrap();
+    let uniform_reward_amount = 95 * 100_000_000u64; // 95 CKB
+    let merkle_root = [0u8; 32];
 
-    // // Shard 1: 50 claimants
-    // let shard1_capacity = uniform_reward_amount * 50;
-    // let shard1_data = data::populate_distribution_data(
-    //     &campaign_id,
-    //     &proof_code_hash,
-    //     &merkle_root,
-    //     uniform_reward_amount,
-    //     0, // shard_id
-    // );
-    // let shard1_output = CellOutput::new_builder()
-    //     .capacity(shard1_capacity.pack())
-    //     .lock(dist_lock_script.clone())
-    //     .build();
+    // Shard 1: 50 claimants
+    let shard1_capacity = uniform_reward_amount * 50;
+    let shard1_data = populate_distribution_data(
+        &campaign_id,
+        &proof_code_hash,
+        &merkle_root,
+        uniform_reward_amount,
+        0, // shard_id
+    );
+    let shard1_output = CellOutput::new_builder()
+        .capacity(shard1_capacity.pack())
+        .lock(dist_lock_script.clone())
+        .build();
 
-    // // Shard 2: 50 claimants
-    // let shard2_capacity = uniform_reward_amount * 50;
-    // let shard2_data = data::populate_distribution_data(
-    //     &campaign_id,
-    //     &proof_code_hash,
-    //     &merkle_root,
-    //     uniform_reward_amount,
-    //     1, // shard_id
-    // );
-    // let shard2_output = CellOutput::new_builder()
-    //     .capacity(shard2_capacity.pack())
-    //     .lock(dist_lock_script)
-    //     .build();
+    // Shard 2: 50 claimants
+    let shard2_capacity = uniform_reward_amount * 50;
+    let shard2_data = populate_distribution_data(
+        &campaign_id,
+        &proof_code_hash,
+        &merkle_root,
+        uniform_reward_amount,
+        1, // shard_id
+    );
+    let shard2_output = CellOutput::new_builder()
+        .capacity(shard2_capacity.pack())
+        .lock(dist_lock_script)
+        .build();
 
-    // // Fee Cell
-    // let fee_capacity = vault_capacity * (fee_percentage as u64) / 10000;
-    // let fee_output = CellOutput::new_builder()
-    //     .capacity(fee_capacity.pack())
-    //     .lock(admin_lock_script)
-    //     .build();
+    // Fee Cell
+    let fee_capacity = vault_capacity * (fee_percentage as u64) / 10000;
+    let fee_output = CellOutput::new_builder()
+        .capacity(fee_capacity.pack())
+        .lock(admin_lock_script)
+        .build();
 
-    // assert_eq!(
-    //     vault_capacity,
-    //     shard1_capacity + shard2_capacity + fee_capacity
-    // );
+    assert_eq!(
+        vault_capacity,
+        shard1_capacity + shard2_capacity + fee_capacity
+    );
 
-    // let outputs = vec![shard1_output, shard2_output, fee_output];
-    // let outputs_data = vec![shard1_data.as_bytes(), shard2_data.as_bytes(), Bytes::new()];
+    let outputs = [shard1_output, shard2_output, fee_output];
+    let outputs_data = [shard1_data.as_bytes(), shard2_data.as_bytes(), Bytes::new()];
 
-    // // 4. Build transaction
-    // let tx = TransactionBuilder::default()
-    //     .input(vault_input)
-    //     .outputs(outputs)
-    //     .outputs_data(outputs_data.pack())
-    //     .cell_dep(vault_script_dep)
-    //     .cell_dep(dist_script_dep)
-    //     .cell_dep(always_success_dep)
-    //     .witness(WitnessArgs::new_builder().build().as_bytes().pack())
-    //     .build();
+    // build transaction
+    let tx = TransactionBuilder::default()
+        .cell_dep(always_success_dep)
+        .cell_dep(dist_script_dep)
+        .cell_dep(vault_script_dep)
+        .input(vault_input)
+        .outputs(outputs)
+        .outputs_data(outputs_data.pack())
+        .witness(WitnessArgs::new_builder().build().as_bytes().pack())
+        .build();
 
-    // let tx = context.complete_tx(tx);
+    let tx = context.complete_tx(tx);
 
-    // // 5. Run verification
-    // let cycles = context
-    //     .verify_tx(&tx, 20_000_000)
-    //     .expect("pass verification");
-    // println!("consume cycles for vault distribution: {}", cycles);
+    // run
+    let cycles = context
+        .verify_tx(&tx, 20_000_000)
+        .expect("pass verification");
+    println!("consume cycles for vault distribution: {}", cycles);
 }
 
 #[test]
@@ -549,8 +560,8 @@ fn test_partial_refund_vault() {
 
     // build transaction
     let tx = TransactionBuilder::default()
-        .cell_dep(vault_script_dep)
         .cell_dep(always_success_dep)
+        .cell_dep(vault_script_dep)
         .input(vault_input)
         .output(vault_output)
         .output(refund_output)
@@ -562,7 +573,7 @@ fn test_partial_refund_vault() {
 
     // run
     let cycles = context
-        .verify_tx(&tx, 20_000_000)
+        .verify_tx(&tx, 10_000_000)
         .expect("pass verification");
     println!("consume cycles for vault refund: {}", cycles);
 }
@@ -637,18 +648,18 @@ fn test_full_refund_vault() {
 
     // build transaction
     let tx = TransactionBuilder::default()
+        .cell_dep(always_success_dep)
+        .cell_dep(vault_script_dep)
         .input(vault_input)
         .output(refund_output)
         .output_data(Bytes::new().pack())
-        .cell_dep(vault_script_dep)
-        .cell_dep(always_success_dep)
         .build();
 
     let tx = context.complete_tx(tx);
 
     // run
     let cycles = context
-        .verify_tx(&tx, 20_000_000)
+        .verify_tx(&tx, 10_000_000)
         .expect("pass verification");
     println!("consume cycles for vault refund: {}", cycles);
 }

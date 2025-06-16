@@ -18,7 +18,6 @@ ckb_std::default_alloc!(16384, 1258306, 64);
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::prelude::*,
-    debug,
     high_level::{
         load_cell, load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type_hash,
         load_script, QueryIter,
@@ -75,10 +74,8 @@ fn entry() -> Result<(), Error> {
             }
 
             if is_distribution_action {
-                debug!("verify_distribution");
                 verify_distribution(&context, &dist_lock_code_hash)
             } else {
-                debug!("verify_refund");
                 verify_refund(&context)
             }
         }
@@ -100,7 +97,6 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
 
     // Ensure the vault has enough capacity to be useful
     if total_capacity <= expected_fee_capacity {
-        debug!("1");
         Err(BizError::InvalidVaultTransaction)?;
     }
 
@@ -112,7 +108,6 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
     let output_count = QueryIter::new(load_cell, Source::Output).count();
     if output_count < 2 {
         // A valid distribution must have at least one shard and one fee cell.
-        debug!("2");
         Err(BizError::InvalidVaultTransaction)?;
     }
 
@@ -177,15 +172,11 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
             if output_lock_hash == context.admin_lock_hash {
                 if total_fee_capacity > 0 {
                     // There can be only one fee cell.
-
-                    debug!("3");
                     Err(BizError::InvalidVaultTransaction)?;
                 }
                 total_fee_capacity += output_capacity;
             } else {
                 // Any other cell type (e.g., a refund cell) is forbidden in this action.
-
-                debug!("4");
                 Err(BizError::InvalidVaultAction)?;
             }
         }
@@ -193,7 +184,6 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
 
     // Ensure we have at least one shard
     if shard_count == 0 {
-        debug!("5");
         Err(BizError::InvalidVaultTransaction)?;
     }
 
@@ -211,7 +201,6 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
     if let Some(reward_amount) = uniform_reward_from_first_shard {
         let available_for_rewards = total_capacity - expected_fee_capacity;
         if reward_amount == 0 || available_for_rewards % reward_amount != 0 {
-            debug!("7");
             Err(BizError::InvalidDistributionData)?;
         }
     }
@@ -222,7 +211,6 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
 fn verify_refund(context: &VmContext) -> Result<(), Error> {
     let output_count = QueryIter::new(load_cell, Source::Output).count();
     if output_count == 0 || output_count > 2 {
-        debug!("6");
         Err(BizError::InvalidVaultTransaction)?;
     }
 
@@ -244,7 +232,6 @@ fn verify_refund(context: &VmContext) -> Result<(), Error> {
             // --- THIS IS A NEW VAULT CELL (PARTIAL REFUND) ---
             if new_vault_found {
                 // There can be at most one new Vault Cell.
-                debug!("8");
                 Err(BizError::InvalidVaultTransaction)?;
             }
 
@@ -279,12 +266,10 @@ fn verify_refund(context: &VmContext) -> Result<(), Error> {
     if !new_vault_found {
         // full refund, amounts but the same
         if total_refund_capacity != context.vault_capacity {
-            debug!("yy");
             Err(BizError::InvalidVaultTransaction)?;
         }
     } else if new_vault_capacity + total_refund_capacity != context.vault_capacity {
         // partial refund, new vault + refund = old vault
-        debug!("xx");
         Err(BizError::InvalidDistributionCapacity)?;
     }
 
