@@ -18,6 +18,7 @@ ckb_std::default_alloc!(16384, 1258306, 64);
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::prelude::*,
+    debug,
     high_level::{
         load_cell, load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type_hash,
         load_script, QueryIter,
@@ -45,7 +46,13 @@ fn entry() -> Result<(), Error> {
     let outputs_count = QueryIter::new(load_cell, Source::GroupOutput).count();
 
     match (inputs_count, outputs_count) {
+        (1, 1) => {
+            // partial refund
+            let context = load_context()?;
+            verify_refund(&context)
+        }
         (1, 0) => {
+            // full refund or distribute
             let context = load_context()?;
 
             // Determine the action being performed by inspecting the outputs.
@@ -68,8 +75,10 @@ fn entry() -> Result<(), Error> {
             }
 
             if is_distribution_action {
+                debug!("verify_distribution");
                 verify_distribution(&context, &dist_lock_code_hash)
             } else {
+                debug!("verify_refund");
                 verify_refund(&context)
             }
         }
@@ -91,6 +100,7 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
 
     // Ensure the vault has enough capacity to be useful
     if total_capacity <= expected_fee_capacity {
+        debug!("1");
         Err(BizError::InvalidVaultTransaction)?;
     }
 
@@ -102,6 +112,7 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
     let output_count = QueryIter::new(load_cell, Source::Output).count();
     if output_count < 2 {
         // A valid distribution must have at least one shard and one fee cell.
+        debug!("2");
         Err(BizError::InvalidVaultTransaction)?;
     }
 
@@ -166,11 +177,15 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
             if output_lock_hash == context.admin_lock_hash {
                 if total_fee_capacity > 0 {
                     // There can be only one fee cell.
+
+                    debug!("3");
                     Err(BizError::InvalidVaultTransaction)?;
                 }
                 total_fee_capacity += output_capacity;
             } else {
                 // Any other cell type (e.g., a refund cell) is forbidden in this action.
+
+                debug!("4");
                 Err(BizError::InvalidVaultAction)?;
             }
         }
@@ -178,6 +193,7 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
 
     // Ensure we have at least one shard
     if shard_count == 0 {
+        debug!("5");
         Err(BizError::InvalidVaultTransaction)?;
     }
 
@@ -195,6 +211,7 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
     if let Some(reward_amount) = uniform_reward_from_first_shard {
         let available_for_rewards = total_capacity - expected_fee_capacity;
         if reward_amount == 0 || available_for_rewards % reward_amount != 0 {
+            debug!("7");
             Err(BizError::InvalidDistributionData)?;
         }
     }
@@ -205,6 +222,7 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
 fn verify_refund(context: &VmContext) -> Result<(), Error> {
     let output_count = QueryIter::new(load_cell, Source::Output).count();
     if output_count == 0 || output_count > 2 {
+        debug!("6");
         Err(BizError::InvalidVaultTransaction)?;
     }
 
@@ -226,20 +244,22 @@ fn verify_refund(context: &VmContext) -> Result<(), Error> {
             // --- THIS IS A NEW VAULT CELL (PARTIAL REFUND) ---
             if new_vault_found {
                 // There can be at most one new Vault Cell.
+                debug!("8");
                 Err(BizError::InvalidVaultTransaction)?;
             }
 
             // The new vault must be a perfect clone, except for capacity.
-            // 1. Verify Lock Script is unchanged.
+            // verify Lock Script is unchanged.
             let input_lock_hash = load_cell_lock_hash(0, Source::GroupInput)?;
             let output_lock_hash = load_cell_lock_hash(i, Source::Output)?;
             if output_lock_hash != input_lock_hash {
                 Err(BizError::InvalidRefundLockHash)?;
             }
 
-            // 2. Verify Data is unchanged.
+            // verify Data is unchanged.
             let input_data = load_cell_data(0, Source::GroupInput)?;
-            if load_cell_data(i, Source::Output)? != input_data {
+            let output_data = load_cell_data(i, Source::Output)?;
+            if output_data != input_data {
                 Err(BizError::InvalidVaultDataUpdate)?;
             }
 
@@ -256,10 +276,15 @@ fn verify_refund(context: &VmContext) -> Result<(), Error> {
         }
     }
 
-    // --- FINAL VALIDATION ---
-    // The sum of the new vault's capacity and the refund's capacity must equal
-    // the original vault's capacity, ensuring no CKB is lost or created.
-    if new_vault_capacity + total_refund_capacity != context.vault_capacity {
+    if !new_vault_found {
+        // full refund, amounts but the same
+        if total_refund_capacity != context.vault_capacity {
+            debug!("yy");
+            Err(BizError::InvalidVaultTransaction)?;
+        }
+    } else if new_vault_capacity + total_refund_capacity != context.vault_capacity {
+        // partial refund, new vault + refund = old vault
+        debug!("xx");
         Err(BizError::InvalidDistributionCapacity)?;
     }
 
