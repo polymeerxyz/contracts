@@ -41,16 +41,17 @@ pub fn program_entry() -> i8 {
 }
 
 fn entry() -> Result<(), Error> {
-    let outputs_count = QueryIter::new(load_cell, Source::GroupOutput).count();
-    if outputs_count != 1 {
-        // If the transaction tries to spend 0 or more than 1 Distribution Shard Cells
-        // with this lock at the same time, it is invalid.
+    // A claim transaction can only spend one Distribution Shard Cell at a time.
+    // This is implicitly checked by `load_context` which loads from `Source::GroupInput` at index 0.
+    // A claim transaction can create 0 (final claim) or 1 (normal claim) new Distribution Shard Cells.
+    let group_outputs_count = QueryIter::new(load_cell, Source::GroupOutput).count();
+    if group_outputs_count > 1 {
         Err(BizError::InvalidClaimTransaction)?
     }
 
     let context = load_context()?;
-    verify_merkle_proof(&context.dist_data, &context.witness)?;
-    verify_proof_cell(&context.dist_data, &context.witness)?;
+    verify_merkle_proof(&context.dist_data, &context.claim_witness)?;
+    verify_proof_cell(&context.dist_data, &context.claim_witness)?;
     verify_outputs(&context)?;
 
     Ok(())
@@ -104,7 +105,6 @@ fn verify_proof_cell(
         .enumerate()
         .filter_map(|(idx, cell)| {
             let code_hash_opt = cell.type_().to_opt().map(|s| s.code_hash().as_bytes());
-            // if Some(dist_data.proof_script_code_hash()) =
             if Some(dist_data.proof_script_code_hash().as_bytes()) == code_hash_opt {
                 Some(idx)
             } else {
@@ -167,7 +167,7 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
     let mut new_dist_cell_found = false;
 
     let script_hash = context.script.calc_script_hash();
-    let expected_reward_lock_hash = context.witness.subscriber_lock_hash();
+    let expected_reward_lock_hash = context.claim_witness.subscriber_lock_hash();
 
     for i in 0..total_output_count {
         let output_cell = load_cell(i, Source::Output)?;

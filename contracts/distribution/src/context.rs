@@ -9,10 +9,10 @@ use molecule::prelude::Entity;
 use crate::error::{BizError, Error};
 
 pub struct VmContext {
+    pub claim_witness: ClaimWitness,
     pub dist_capacity: u64,
     pub dist_data: DistributionCellData,
     pub script: Script,
-    pub witness: ClaimWitness,
 }
 
 pub fn load_context() -> Result<VmContext, Error> {
@@ -23,14 +23,19 @@ pub fn load_context() -> Result<VmContext, Error> {
     let dist_data = DistributionCellData::from_slice(&dist_data_bytes)
         .map_err(|_| BizError::InvalidDistributionData)?;
 
-    let witness_bytes = load_witness_args(0, Source::GroupInput)?;
-    let witness = ClaimWitness::from_slice(witness_bytes.as_slice())
-        .map_err(|_| BizError::InvalidWitnessData)?;
+    let witness_args = load_witness_args(0, Source::GroupInput)?;
+    let witness_args_bytes = witness_args
+        .lock()
+        .to_opt()
+        .ok_or(BizError::InvalidWitnessData)?
+        .raw_data();
+    let claim_witness =
+        ClaimWitness::from_slice(&witness_args_bytes).map_err(|_| BizError::InvalidWitnessData)?;
 
     Ok(VmContext {
+        claim_witness,
         dist_capacity: dist_input.capacity().unpack(),
         dist_data,
         script,
-        witness,
     })
 }

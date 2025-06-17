@@ -264,7 +264,7 @@ fn verify_refund(context: &VmContext) -> Result<(), Error> {
     }
 
     if !new_vault_found {
-        // full refund, amounts but the same
+        // full refund, refund = vault
         if total_refund_capacity != context.vault_capacity {
             Err(BizError::InvalidVaultTransaction)?;
         }
