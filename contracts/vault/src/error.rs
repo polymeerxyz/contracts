@@ -1,4 +1,4 @@
-use ckb_std::error::SysError;
+use ckb_std::{debug, error::SysError};
 use common::error::Error as CommonError;
 
 #[derive(Debug)]
@@ -45,6 +45,7 @@ impl From<CommonError> for Error {
 
 impl From<Error> for i8 {
     fn from(err: Error) -> i8 {
+        debug!("vault error {:?}", err);
         match err {
             Error::Sys(v) => match v {
                 SysError::IndexOutOfBound => 1,

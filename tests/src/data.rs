@@ -15,7 +15,7 @@ pub fn populate_proof_data(subscriber_lock_hash: &Byte32, campaign_id: &Byte32) 
 
     ProofCellData::new_builder()
         .entity_id(entity_id)
-        .campaign_id(Byte32::from_slice(campaign_id.as_slice()).unwrap())
+        .campaign_id(campaign_id.clone())
         .proof(proof)
         .subscriber_lock_hash(subscriber_lock_hash.clone())
         .build()
@@ -28,9 +28,9 @@ pub fn populate_vault_data(
     fee_percentage: u16,
 ) -> VaultCellData {
     VaultCellData::new_builder()
-        .campaign_id(Byte32::from_slice(campaign_id.as_slice()).unwrap())
-        .creator_lock_hash(Byte32::from_slice(creator_lock_hash.as_slice()).unwrap())
-        .proof_script_code_hash(Byte32::from_slice(proof_script_code_hash.as_slice()).unwrap())
+        .campaign_id(campaign_id.clone())
+        .creator_lock_hash(creator_lock_hash.clone())
+        .proof_script_code_hash(proof_script_code_hash.clone())
         .fee_percentage(fee_percentage.pack())
         .build()
 }
@@ -43,8 +43,8 @@ pub fn populate_distribution_data(
     shard_id: u32,
 ) -> DistributionCellData {
     DistributionCellData::new_builder()
-        .campaign_id(Byte32::from_slice(campaign_id.as_slice()).unwrap())
-        .proof_script_code_hash(Byte32::from_slice(proof_script_code_hash.as_slice()).unwrap())
+        .campaign_id(campaign_id.clone())
+        .proof_script_code_hash(proof_script_code_hash.clone())
         .merkle_root(Byte32::from_slice(merkle_root).unwrap())
         .uniform_reward_amount(reward_amount.pack())
         .shard_id(shard_id.pack())
@@ -62,8 +62,8 @@ pub fn populate_claim_witness(
         .collect();
 
     ClaimWitness::new_builder()
-        .proof_cell_out_point(OutPoint::from_slice(proof_cell_out_point.as_slice()).unwrap())
-        .subscriber_lock_hash(Byte32::from_slice(subscriber_lock_hash.as_slice()).unwrap())
+        .proof_cell_out_point(proof_cell_out_point.clone())
+        .subscriber_lock_hash(subscriber_lock_hash.clone())
         .merkle_proof(Byte32Vec::new_builder().extend(proof_vec).build())
         .build()
 }

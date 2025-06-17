@@ -14,6 +14,7 @@ use std::path::PathBuf;
 use std::str::FromStr;
 
 pub mod data;
+pub mod hash;
 pub mod util;
 
 #[cfg(test)]

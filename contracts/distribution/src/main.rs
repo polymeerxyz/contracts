@@ -41,12 +41,17 @@ pub fn program_entry() -> i8 {
 }
 
 fn entry() -> Result<(), Error> {
+    // A claim transaction can only spend one Distribution Shard Cell at a time.
+    // This is implicitly checked by `load_context` which loads from `Source::GroupInput` at index 0.
+    // A claim transaction can create 0 (final claim) or 1 (normal claim) new Distribution Shard Cells.
+    let group_outputs_count = QueryIter::new(load_cell, Source::GroupOutput).count();
+    if group_outputs_count > 1 {
+        Err(BizError::InvalidClaimTransaction)?
+    }
+
     let context = load_context()?;
-
-    verify_merkle_proof(&context.dist_data, &context.witness)?;
-
-    verify_proof_cell(&context.dist_data, &context.witness)?;
-
+    verify_merkle_proof(&context.dist_data, &context.claim_witness)?;
+    verify_proof_cell(&context.dist_data, &context.claim_witness)?;
     verify_outputs(&context)?;
 
     Ok(())
@@ -96,27 +101,24 @@ fn verify_proof_cell(
     dist_data: &DistributionCellData,
     witness: &ClaimWitness,
 ) -> Result<(), Error> {
-    // Find the input Proof Cell by its Type ID.
-    let mut proof_cell_input_index = None;
-    let mut proof_cell_count = 0;
-
-    for (i, cell) in QueryIter::new(load_cell, Source::Input).enumerate() {
-        let opt_script = cell.type_().to_opt();
-        if opt_script.is_some()
-            && opt_script.unwrap().code_hash().as_bytes()
-                == dist_data.proof_script_code_hash().as_bytes()
-        {
-            proof_cell_count += 1;
-            proof_cell_input_index = Some(i);
-        }
-    }
+    let proof_cell_indices = QueryIter::new(load_cell, Source::Input)
+        .enumerate()
+        .filter_map(|(idx, cell)| {
+            let code_hash_opt = cell.type_().to_opt().map(|s| s.code_hash().as_bytes());
+            if Some(dist_data.proof_script_code_hash().as_bytes()) == code_hash_opt {
+                Some(idx)
+            } else {
+                None
+            }
+        })
+        .collect::<alloc::vec::Vec<_>>();
 
     // Ensure exactly one proof cell is being spent
-    if proof_cell_count != 1 {
+    if proof_cell_indices.len() != 1 {
         Err(BizError::InvalidProofCellCount)?;
     }
 
-    let index = proof_cell_input_index.ok_or(BizError::MissingProofCell)?;
+    let index = proof_cell_indices[0];
 
     // Check 1: The OutPoint in the witness must match the actual OutPoint being spent.
     let actual_proof_outpoint = load_input_out_point(index, Source::Input)?;
@@ -147,12 +149,10 @@ fn verify_proof_cell(
 
 /// Verifies the transaction's outputs (Reward Cell and new Distribution Shard Cell).
 fn verify_outputs(context: &VmContext) -> Result<(), Error> {
-    let input_dist_cell = load_cell(0, Source::GroupInput)?;
-    let input_capacity: u64 = input_dist_cell.capacity().unpack();
     let reward_amount = context.dist_data.uniform_reward_amount().unpack();
 
     // Check if this is the final claim (no capacity left for another reward)
-    let is_final_claim = input_capacity == reward_amount;
+    let is_final_claim = context.dist_capacity == reward_amount;
 
     // For final claim: only reward cell
     // For normal claim: reward cell + new distribution cell
@@ -167,17 +167,18 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
     let mut new_dist_cell_found = false;
 
     let script_hash = context.script.calc_script_hash();
+    let expected_reward_lock_hash = context.claim_witness.subscriber_lock_hash();
 
     for i in 0..total_output_count {
+        let output_cell = load_cell(i, Source::Output)?;
         let output_lock_hash = load_cell_lock_hash(i, Source::Output)?;
+        let output_cell_capacity: u64 = output_cell.capacity().unpack();
 
-        if output_lock_hash == context.witness.subscriber_lock_hash().as_slice() {
+        if output_lock_hash == expected_reward_lock_hash.as_slice() {
             if reward_cell_found {
                 Err(BizError::InvalidClaimTransaction)?;
             }
-            let reward_cell = load_cell(i, Source::Output)?;
-            let reward_cell_capacity: u64 = reward_cell.capacity().unpack();
-            if reward_cell_capacity != reward_amount {
+            if output_cell_capacity != reward_amount {
                 Err(BizError::InvalidRewardAmount)?;
             }
             reward_cell_found = true;
@@ -202,9 +203,7 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
                 Err(BizError::InvalidShardDataUpdate)?;
             }
 
-            let output_cell = load_cell(i, Source::Output)?;
-            let output_cell_capacity: u64 = output_cell.capacity().unpack();
-            if output_cell_capacity != input_capacity - reward_amount {
+            if output_cell_capacity != context.dist_capacity - reward_amount {
                 Err(BizError::InvalidShardCapacity)?;
             }
             new_dist_cell_found = true;
