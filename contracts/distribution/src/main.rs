@@ -180,9 +180,8 @@ fn verify_outputs(context: &VmContext) -> Result<(), Error> {
         let output_cell = load_cell(index, Source::Output)?;
         let output_cell_capacity: u64 = output_cell.capacity().unpack();
 
-        let input_type_hash = load_cell_type_hash(0, Source::GroupInput)?;
-        let output_type_hash = load_cell_type_hash(index, Source::Output)?;
-        if input_type_hash != output_type_hash {
+        // The type script of a Distribution Shard Cell must be null.
+        if load_cell_type_hash(index, Source::Output)?.is_some() {
             return Err(BizError::InvalidTypeScriptUpdate.into());
         }
 

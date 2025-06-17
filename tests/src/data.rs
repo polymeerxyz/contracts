@@ -37,6 +37,7 @@ pub fn populate_vault_data(
 
 pub fn populate_distribution_data(
     campaign_id: &Byte32,
+    admin_lock_hash: &Byte32,
     proof_script_code_hash: &Byte32,
     merkle_root: &[u8; 32],
     reward_amount: u64,
@@ -44,6 +45,7 @@ pub fn populate_distribution_data(
 ) -> DistributionCellData {
     DistributionCellData::new_builder()
         .campaign_id(campaign_id.clone())
+        .admin_lock_hash(admin_lock_hash.clone())
         .proof_script_code_hash(proof_script_code_hash.clone())
         .merkle_root(Byte32::from_slice(merkle_root).unwrap())
         .uniform_reward_amount(reward_amount.pack())

@@ -23,8 +23,6 @@ pub enum BizError {
     InvalidVaultData,
     InvalidVaultDataUpdate,
     InvalidVaultTransaction,
-    MissingInfoTypeScript,
-    InvalidInfoTypeArgs,
 }
 
 impl From<SysError> for Error {

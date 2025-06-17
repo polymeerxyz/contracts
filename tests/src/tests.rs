@@ -47,6 +47,8 @@ fn test_claim_distribution() {
     let admin_lock_script = context
         .build_script(&always_success_out_point, Bytes::from(vec![0]))
         .unwrap();
+    let admin_lock_hash =
+        Byte32::from_slice(admin_lock_script.calc_script_hash().as_slice()).unwrap();
 
     let subscriber_lock_script = context
         .build_script(&always_success_out_point, Bytes::from(vec![1])) // claimant 1
@@ -109,6 +111,7 @@ fn test_claim_distribution() {
         .unwrap();
     let dist_data = data::populate_distribution_data(
         &campaign_id,
+        &admin_lock_hash,
         &Byte32::from_slice(proof_code_hash.as_slice()).unwrap(),
         &merkle_root,
         reward_amount,
@@ -118,7 +121,6 @@ fn test_claim_distribution() {
         CellOutput::new_builder()
             .capacity(dist_capacity.pack())
             .lock(dist_lock_script.clone())
-            .type_(Some(admin_lock_script.clone()).pack())
             .build(),
         dist_data.as_bytes(),
     );
@@ -131,7 +133,6 @@ fn test_claim_distribution() {
     let dist_output = CellOutput::new_builder()
         .capacity(new_dist_capacity.pack())
         .lock(dist_lock_script)
-        .type_(Some(admin_lock_script).pack())
         .build();
 
     let reward_output = CellOutput::new_builder()
@@ -198,6 +199,8 @@ fn test_final_claim_distribution_with_dust() {
     let admin_lock_script = context
         .build_script(&always_success_out_point, Bytes::from(vec![0]))
         .unwrap();
+    let admin_lock_hash =
+        Byte32::from_slice(admin_lock_script.calc_script_hash().as_slice()).unwrap();
 
     let subscriber_lock_script = context
         .build_script(&always_success_out_point, Bytes::from(vec![1])) // claimant 1
@@ -243,6 +246,7 @@ fn test_final_claim_distribution_with_dust() {
         .unwrap();
     let dist_data = data::populate_distribution_data(
         &campaign_id,
+        &admin_lock_hash,
         &Byte32::from_slice(proof_code_hash.as_slice()).unwrap(),
         &merkle_root,
         reward_amount,
@@ -252,7 +256,6 @@ fn test_final_claim_distribution_with_dust() {
         CellOutput::new_builder()
             .capacity(dist_capacity.pack())
             .lock(dist_lock_script.clone())
-            .type_(Some(admin_lock_script.clone()).pack())
             .build(),
         dist_data.as_bytes(),
     );
@@ -337,6 +340,8 @@ fn test_final_claim_distribution_no_dust() {
     let admin_lock_script = context
         .build_script(&always_success_out_point, Bytes::from(vec![0]))
         .unwrap();
+    let admin_lock_hash =
+        Byte32::from_slice(admin_lock_script.calc_script_hash().as_slice()).unwrap();
 
     let subscriber_lock_script = context
         .build_script(&always_success_out_point, Bytes::from(vec![1])) // claimant 1
@@ -381,6 +386,7 @@ fn test_final_claim_distribution_no_dust() {
         .unwrap();
     let dist_data = data::populate_distribution_data(
         &campaign_id,
+        &admin_lock_hash,
         &Byte32::from_slice(proof_code_hash.as_slice()).unwrap(),
         &merkle_root,
         reward_amount,
@@ -390,7 +396,6 @@ fn test_final_claim_distribution_no_dust() {
         CellOutput::new_builder()
             .capacity(dist_capacity.pack())
             .lock(dist_lock_script.clone())
-            .type_(Some(admin_lock_script).pack())
             .build(),
         dist_data.as_bytes(),
     );
@@ -634,6 +639,9 @@ fn test_spend_vault() {
     let admin_lock_script = context
         .build_script(&always_success_out_point, Bytes::from(vec![1]))
         .unwrap();
+    let admin_lock_hash =
+        Byte32::from_slice(admin_lock_script.calc_script_hash().as_slice()).unwrap();
+
     let creator_lock_script = context
         .build_script(&always_success_out_point, Bytes::from(vec![2]))
         .unwrap();
@@ -679,6 +687,7 @@ fn test_spend_vault() {
     let shard1_capacity = uniform_reward_amount * 50;
     let shard1_data = populate_distribution_data(
         &campaign_id,
+        &admin_lock_hash,
         &proof_code_hash,
         &merkle_root,
         uniform_reward_amount,
@@ -687,13 +696,13 @@ fn test_spend_vault() {
     let shard1_output = CellOutput::new_builder()
         .capacity(shard1_capacity.pack())
         .lock(dist_lock_script.clone())
-        .type_(Some(admin_lock_script.clone()).pack())
         .build();
 
     // Shard 2: 50 claimants
     let shard2_capacity = uniform_reward_amount * 50;
     let shard2_data = populate_distribution_data(
         &campaign_id,
+        &admin_lock_hash,
         &proof_code_hash,
         &merkle_root,
         uniform_reward_amount,
@@ -702,7 +711,6 @@ fn test_spend_vault() {
     let shard2_output = CellOutput::new_builder()
         .capacity(shard2_capacity.pack())
         .lock(dist_lock_script)
-        .type_(Some(admin_lock_script.clone()).pack())
         .build();
 
     // Fee Cell

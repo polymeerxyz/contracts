@@ -22,6 +22,7 @@ impl ::core::fmt::Display for DistributionCellData {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "campaign_id", self.campaign_id())?;
+        write!(f, ", {}: {}", "admin_lock_hash", self.admin_lock_hash())?;
         write!(f, ", {}: {}", "shard_id", self.shard_id())?;
         write!(f, ", {}: {}", "merkle_root", self.merkle_root())?;
         write!(
@@ -46,29 +47,33 @@ impl ::core::default::Default for DistributionCellData {
     }
 }
 impl DistributionCellData {
-    const DEFAULT_VALUE: [u8; 108] = [
+    const DEFAULT_VALUE: [u8; 140] = [
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
     ];
-    pub const TOTAL_SIZE: usize = 108;
-    pub const FIELD_SIZES: [usize; 5] = [32, 4, 32, 32, 8];
-    pub const FIELD_COUNT: usize = 5;
+    pub const TOTAL_SIZE: usize = 140;
+    pub const FIELD_SIZES: [usize; 6] = [32, 32, 4, 32, 32, 8];
+    pub const FIELD_COUNT: usize = 6;
     pub fn campaign_id(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
+    pub fn admin_lock_hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(32..64))
+    }
     pub fn shard_id(&self) -> Uint32 {
-        Uint32::new_unchecked(self.0.slice(32..36))
+        Uint32::new_unchecked(self.0.slice(64..68))
     }
     pub fn merkle_root(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(36..68))
-    }
-    pub fn proof_script_code_hash(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(68..100))
     }
+    pub fn proof_script_code_hash(&self) -> Byte32 {
+        Byte32::new_unchecked(self.0.slice(100..132))
+    }
     pub fn uniform_reward_amount(&self) -> Uint64 {
-        Uint64::new_unchecked(self.0.slice(100..108))
+        Uint64::new_unchecked(self.0.slice(132..140))
     }
     pub fn as_reader<'r>(&'r self) -> DistributionCellDataReader<'r> {
         DistributionCellDataReader::new_unchecked(self.as_slice())
@@ -98,6 +103,7 @@ impl molecule::prelude::Entity for DistributionCellData {
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
             .campaign_id(self.campaign_id())
+            .admin_lock_hash(self.admin_lock_hash())
             .shard_id(self.shard_id())
             .merkle_root(self.merkle_root())
             .proof_script_code_hash(self.proof_script_code_hash())
@@ -124,6 +130,7 @@ impl<'r> ::core::fmt::Display for DistributionCellDataReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "campaign_id", self.campaign_id())?;
+        write!(f, ", {}: {}", "admin_lock_hash", self.admin_lock_hash())?;
         write!(f, ", {}: {}", "shard_id", self.shard_id())?;
         write!(f, ", {}: {}", "merkle_root", self.merkle_root())?;
         write!(
@@ -142,23 +149,26 @@ impl<'r> ::core::fmt::Display for DistributionCellDataReader<'r> {
     }
 }
 impl<'r> DistributionCellDataReader<'r> {
-    pub const TOTAL_SIZE: usize = 108;
-    pub const FIELD_SIZES: [usize; 5] = [32, 4, 32, 32, 8];
-    pub const FIELD_COUNT: usize = 5;
+    pub const TOTAL_SIZE: usize = 140;
+    pub const FIELD_SIZES: [usize; 6] = [32, 32, 4, 32, 32, 8];
+    pub const FIELD_COUNT: usize = 6;
     pub fn campaign_id(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
+    pub fn admin_lock_hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[32..64])
+    }
     pub fn shard_id(&self) -> Uint32Reader<'r> {
-        Uint32Reader::new_unchecked(&self.as_slice()[32..36])
+        Uint32Reader::new_unchecked(&self.as_slice()[64..68])
     }
     pub fn merkle_root(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[36..68])
-    }
-    pub fn proof_script_code_hash(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[68..100])
     }
+    pub fn proof_script_code_hash(&self) -> Byte32Reader<'r> {
+        Byte32Reader::new_unchecked(&self.as_slice()[100..132])
+    }
     pub fn uniform_reward_amount(&self) -> Uint64Reader<'r> {
-        Uint64Reader::new_unchecked(&self.as_slice()[100..108])
+        Uint64Reader::new_unchecked(&self.as_slice()[132..140])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for DistributionCellDataReader<'r> {
@@ -185,17 +195,22 @@ impl<'r> molecule::prelude::Reader<'r> for DistributionCellDataReader<'r> {
 #[derive(Clone, Debug, Default)]
 pub struct DistributionCellDataBuilder {
     pub(crate) campaign_id: Byte32,
+    pub(crate) admin_lock_hash: Byte32,
     pub(crate) shard_id: Uint32,
     pub(crate) merkle_root: Byte32,
     pub(crate) proof_script_code_hash: Byte32,
     pub(crate) uniform_reward_amount: Uint64,
 }
 impl DistributionCellDataBuilder {
-    pub const TOTAL_SIZE: usize = 108;
-    pub const FIELD_SIZES: [usize; 5] = [32, 4, 32, 32, 8];
-    pub const FIELD_COUNT: usize = 5;
+    pub const TOTAL_SIZE: usize = 140;
+    pub const FIELD_SIZES: [usize; 6] = [32, 32, 4, 32, 32, 8];
+    pub const FIELD_COUNT: usize = 6;
     pub fn campaign_id(mut self, v: Byte32) -> Self {
         self.campaign_id = v;
+        self
+    }
+    pub fn admin_lock_hash(mut self, v: Byte32) -> Self {
+        self.admin_lock_hash = v;
         self
     }
     pub fn shard_id(mut self, v: Uint32) -> Self {
@@ -223,6 +238,7 @@ impl molecule::prelude::Builder for DistributionCellDataBuilder {
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         writer.write_all(self.campaign_id.as_slice())?;
+        writer.write_all(self.admin_lock_hash.as_slice())?;
         writer.write_all(self.shard_id.as_slice())?;
         writer.write_all(self.merkle_root.as_slice())?;
         writer.write_all(self.proof_script_code_hash.as_slice())?;

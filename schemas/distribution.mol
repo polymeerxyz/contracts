@@ -2,20 +2,23 @@ import base;
 
 struct DistributionCellData {
     // A unique identifier for the campaign this shard belongs to.
-    campaign_id:           Byte32,
+    campaign_id:            Byte32,
+
+    // The lock hash of the admin account, used for refunding dust.
+    admin_lock_hash:        Byte32,
 
     // The index of this shard (e.g., 0, 1, 2...).
-    shard_id:              Uint32,
+    shard_id:               Uint32,
 
     // The Merkle root hash of the list of claimants assigned to this shard.
-    merkle_root:           Byte32,
+    merkle_root:            Byte32,
 
     // The code hash of the platform's Proof Type Script.
-    proof_script_code_hash:    Byte32,
+    proof_script_code_hash: Byte32,
 
     // The pre-calculated, uniform reward amount for every claimant.
     // Stored in Shannons (1 CKB = 100,000,000 Shannons).
-    uniform_reward_amount: Uint64,
+    uniform_reward_amount:  Uint64,
 }
 
 struct OutPoint {

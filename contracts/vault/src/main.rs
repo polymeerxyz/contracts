@@ -122,11 +122,9 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
         if output_lock.code_hash().as_slice() == dist_lock_code_hash {
             // This is a Distribution Shard Cell.
 
-            // The type script of a Distribution Shard Cell must exist and its args must be the admin's lock hash.
-            let type_script_hash =
-                load_cell_type_hash(i, Source::Output)?.ok_or(BizError::MissingInfoTypeScript)?;
-            if type_script_hash != context.admin_lock_hash.as_ref() {
-                Err(BizError::InvalidInfoTypeArgs)?;
+            // The type script of a Distribution Shard Cell must be null.
+            if load_cell_type_hash(i, Source::Output)?.is_some() {
+                Err(BizError::InvalidVaultTransaction)?;
             }
 
             total_dist_capacity_sum += output_capacity;
@@ -135,6 +133,11 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
             let shard_data_bytes = load_cell_data(i, Source::Output)?;
             let shard_data = DistributionCellData::from_slice(&shard_data_bytes)
                 .map_err(|_| BizError::InvalidDistributionData)?;
+
+            // Verify admin_lock_hash is correctly propagated from the vault's lock.
+            if shard_data.admin_lock_hash().as_slice() != context.admin_lock_hash.as_ref() {
+                Err(BizError::InvalidDistributionData)?;
+            }
 
             let shard_capacity = output_capacity;
             let current_shard_reward = shard_data.uniform_reward_amount().unpack();
