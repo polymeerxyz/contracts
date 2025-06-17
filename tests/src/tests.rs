@@ -44,15 +44,19 @@ fn test_claim_distribution() {
     let proof_code_hash = get_code_hash(&mut context, &proof_out_point);
 
     // lock scripts
+    let admin_lock_script = context
+        .build_script(&always_success_out_point, Bytes::from(vec![0]))
+        .unwrap();
+
     let subscriber_lock_script = context
         .build_script(&always_success_out_point, Bytes::from(vec![1])) // claimant 1
-        .expect("script");
+        .unwrap();
     let subscriber_lock_hash =
         Byte32::from_slice(subscriber_lock_script.calc_script_hash().as_slice()).unwrap();
 
     let other_subscriber_lock = context
         .build_script(&always_success_out_point, Bytes::from(vec![2])) // claimant 2
-        .expect("script");
+        .unwrap();
     let other_subscriber_lock_hash =
         Byte32::from_slice(other_subscriber_lock.calc_script_hash().as_slice()).unwrap();
 
@@ -114,6 +118,7 @@ fn test_claim_distribution() {
         CellOutput::new_builder()
             .capacity(dist_capacity.pack())
             .lock(dist_lock_script.clone())
+            .type_(Some(admin_lock_script.clone()).pack())
             .build(),
         dist_data.as_bytes(),
     );
@@ -123,18 +128,16 @@ fn test_claim_distribution() {
 
     // prepare outputs
     let new_dist_capacity = dist_capacity - reward_amount;
-    let new_dist_output = CellOutput::new_builder()
+    let dist_output = CellOutput::new_builder()
         .capacity(new_dist_capacity.pack())
         .lock(dist_lock_script)
+        .type_(Some(admin_lock_script).pack())
         .build();
 
     let reward_output = CellOutput::new_builder()
         .capacity(reward_amount.pack())
         .lock(subscriber_lock_script)
         .build();
-
-    let outputs = [new_dist_output, reward_output];
-    let outputs_data = [dist_data.as_bytes(), Bytes::new()];
 
     // prepare witness
     let proof_cell_out_point_for_witness =
@@ -147,9 +150,6 @@ fn test_claim_distribution() {
 
     let witness_for_dist = WitnessArgs::new_builder()
         .lock(Some(claim_witness.as_bytes()).pack())
-        // .lock(BytesOpt::from_slice(claim_witness.as_slice()).unwrap())
-        .input_type(BytesOpt::new_builder().build())
-        .output_type(BytesOpt::new_builder().build())
         .build();
 
     // build transaction
@@ -157,9 +157,9 @@ fn test_claim_distribution() {
         .cell_dep(always_success_dep)
         .cell_dep(dist_script_dep)
         .cell_dep(proof_script_dep)
-        .inputs(vec![dist_input, proof_input])
-        .outputs(outputs)
-        .outputs_data(outputs_data.pack())
+        .inputs([dist_input, proof_input])
+        .outputs([dist_output, reward_output])
+        .outputs_data([dist_data.as_bytes(), Bytes::from("")].pack())
         .witness(witness_for_dist.as_bytes().pack())
         .build();
 
@@ -169,7 +169,275 @@ fn test_claim_distribution() {
     let cycles = context
         .verify_tx(&tx, 10_000_000)
         .expect("pass verification");
-    println!("consume cycles for distribution: {}", cycles);
+    println!("consume cycles for distribution claim: {}", cycles);
+}
+
+#[test]
+fn test_final_claim_distribution_with_dust() {
+    // deploy contracts, prepare scripts
+    let mut context = Context::default();
+    let dist_bin = Loader::default().load_binary("distribution");
+    let dist_out_point = context.deploy_cell(dist_bin);
+    let dist_script_dep = CellDep::new_builder()
+        .out_point(dist_out_point.clone())
+        .build();
+
+    let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let always_success_dep = CellDep::new_builder()
+        .out_point(always_success_out_point.clone())
+        .build();
+
+    let proof_bin = Loader::default().load_binary("proof");
+    let proof_out_point = context.deploy_cell(proof_bin.clone());
+    let proof_script_dep = CellDep::new_builder()
+        .out_point(proof_out_point.clone())
+        .build();
+    let proof_code_hash = get_code_hash(&mut context, &proof_out_point);
+
+    // lock scripts
+    let admin_lock_script = context
+        .build_script(&always_success_out_point, Bytes::from(vec![0]))
+        .unwrap();
+
+    let subscriber_lock_script = context
+        .build_script(&always_success_out_point, Bytes::from(vec![1])) // claimant 1
+        .unwrap();
+    let subscriber_lock_hash =
+        Byte32::from_slice(subscriber_lock_script.calc_script_hash().as_slice()).unwrap();
+
+    // prepare data
+    let campaign_id = Byte32::from_slice(&[1; 32]).unwrap();
+    let proof_data = populate_proof_data(&subscriber_lock_hash, &campaign_id);
+    let proof_type_script = context
+        .build_script(&proof_out_point, Bytes::from(vec![0; 32])) // dummy type id
+        .unwrap();
+    let proof_cell_capacity = 254 * 100_000_000u64; // 254 CKB
+    let proof_input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(proof_cell_capacity.pack())
+            .lock(subscriber_lock_script.clone())
+            .type_(Some(proof_type_script).pack())
+            .build(),
+        proof_data.as_bytes(),
+    );
+    let proof_input = CellInput::new_builder()
+        .previous_output(proof_input_out_point.clone())
+        .build();
+
+    // prepare Merkle Tree (only one leaf for final claim)
+    let mut leaf_data = vec![];
+    leaf_data.extend_from_slice(proof_input_out_point.as_slice());
+    leaf_data.extend_from_slice(subscriber_lock_hash.as_slice());
+    let leaf0 = util::blake2b_256(leaf_data);
+
+    let leaves = vec![leaf0];
+    let merkle_root = util::build_merkle_root(&leaves);
+    let merkle_proof = util::build_merkle_proof(&leaves, 0);
+
+    // prepare distribution shard
+    let reward_amount = 100 * 100_000_000u64; // 100 CKB
+    let dust_amount = 546 * 100_000_000u64; // 546 CKB (min cell capacity)
+    let dist_capacity = reward_amount + dust_amount;
+    let dist_lock_script = context
+        .build_script(&dist_out_point, Default::default())
+        .unwrap();
+    let dist_data = data::populate_distribution_data(
+        &campaign_id,
+        &Byte32::from_slice(proof_code_hash.as_slice()).unwrap(),
+        &merkle_root,
+        reward_amount,
+        0,
+    );
+    let dist_input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(dist_capacity.pack())
+            .lock(dist_lock_script.clone())
+            .type_(Some(admin_lock_script.clone()).pack())
+            .build(),
+        dist_data.as_bytes(),
+    );
+    let dist_input = CellInput::new_builder()
+        .previous_output(dist_input_out_point)
+        .build();
+
+    // prepare outputs
+    let reward_output = CellOutput::new_builder()
+        .capacity(reward_amount.pack())
+        .lock(subscriber_lock_script)
+        .build();
+
+    let admin_refund_output = CellOutput::new_builder()
+        .capacity(dust_amount.pack())
+        .lock(admin_lock_script)
+        .build();
+    println!(
+        "lock_script_hash {:?}",
+        admin_refund_output.calc_lock_hash().as_slice()
+    );
+
+    // prepare witness
+    let proof_cell_out_point_for_witness =
+        OutPoint::from_slice(proof_input_out_point.as_slice()).unwrap();
+    let claim_witness = populate_claim_witness(
+        &proof_cell_out_point_for_witness,
+        &subscriber_lock_hash,
+        &merkle_proof,
+    );
+
+    let witness_for_dist = WitnessArgs::new_builder()
+        .lock(Some(claim_witness.as_bytes()).pack())
+        .build();
+
+    // build transaction
+    let tx = TransactionBuilder::default()
+        .cell_dep(always_success_dep)
+        .cell_dep(dist_script_dep)
+        .cell_dep(proof_script_dep)
+        .inputs([dist_input, proof_input])
+        .outputs([reward_output, admin_refund_output])
+        .outputs_data([Bytes::new(), Bytes::new()].pack())
+        .witness(witness_for_dist.as_bytes().pack())
+        .build();
+
+    let tx = context.complete_tx(tx);
+
+    // run
+    let cycles = context
+        .verify_tx(&tx, 10_000_000)
+        .expect("pass verification");
+    println!(
+        "consume cycles for distribution final claim with dust: {}",
+        cycles
+    );
+}
+
+#[test]
+fn test_final_claim_distribution_no_dust() {
+    // deploy contracts, prepare scripts
+    let mut context = Context::default();
+    let dist_bin = Loader::default().load_binary("distribution");
+    let dist_out_point = context.deploy_cell(dist_bin);
+    let dist_script_dep = CellDep::new_builder()
+        .out_point(dist_out_point.clone())
+        .build();
+
+    let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
+    let always_success_dep = CellDep::new_builder()
+        .out_point(always_success_out_point.clone())
+        .build();
+
+    let proof_bin = Loader::default().load_binary("proof");
+    let proof_out_point = context.deploy_cell(proof_bin.clone());
+    let proof_script_dep = CellDep::new_builder()
+        .out_point(proof_out_point.clone())
+        .build();
+    let proof_code_hash = get_code_hash(&mut context, &proof_out_point);
+
+    // lock scripts
+    let admin_lock_script = context
+        .build_script(&always_success_out_point, Bytes::from(vec![0]))
+        .unwrap();
+
+    let subscriber_lock_script = context
+        .build_script(&always_success_out_point, Bytes::from(vec![1])) // claimant 1
+        .unwrap();
+    let subscriber_lock_hash =
+        Byte32::from_slice(subscriber_lock_script.calc_script_hash().as_slice()).unwrap();
+
+    // prepare data
+    let campaign_id = Byte32::from_slice(&[1; 32]).unwrap();
+    let proof_data = populate_proof_data(&subscriber_lock_hash, &campaign_id);
+    let proof_type_script = context
+        .build_script(&proof_out_point, Bytes::from(vec![0; 32])) // dummy type id
+        .unwrap();
+    let proof_cell_capacity = 254 * 100_000_000u64; // 254 CKB
+    let proof_input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(proof_cell_capacity.pack())
+            .lock(subscriber_lock_script.clone())
+            .type_(Some(proof_type_script).pack())
+            .build(),
+        proof_data.as_bytes(),
+    );
+    let proof_input = CellInput::new_builder()
+        .previous_output(proof_input_out_point.clone())
+        .build();
+
+    // prepare Merkle Tree (only one leaf for final claim)
+    let mut leaf_data = vec![];
+    leaf_data.extend_from_slice(proof_input_out_point.as_slice());
+    leaf_data.extend_from_slice(subscriber_lock_hash.as_slice());
+    let leaf0 = util::blake2b_256(leaf_data);
+
+    let leaves = vec![leaf0];
+    let merkle_root = util::build_merkle_root(&leaves);
+    let merkle_proof = util::build_merkle_proof(&leaves, 0);
+
+    // prepare distribution shard
+    let reward_amount = 100 * 100_000_000u64; // 100 CKB
+    let dist_capacity = reward_amount; // No dust
+    let dist_lock_script = context
+        .build_script(&dist_out_point, Default::default())
+        .unwrap();
+    let dist_data = data::populate_distribution_data(
+        &campaign_id,
+        &Byte32::from_slice(proof_code_hash.as_slice()).unwrap(),
+        &merkle_root,
+        reward_amount,
+        0,
+    );
+    let dist_input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity(dist_capacity.pack())
+            .lock(dist_lock_script.clone())
+            .type_(Some(admin_lock_script).pack())
+            .build(),
+        dist_data.as_bytes(),
+    );
+    let dist_input = CellInput::new_builder()
+        .previous_output(dist_input_out_point)
+        .build();
+
+    // prepare outputs
+    let reward_output = CellOutput::new_builder()
+        .capacity(reward_amount.pack())
+        .lock(subscriber_lock_script)
+        .build();
+
+    // prepare witness
+    let proof_cell_out_point_for_witness =
+        OutPoint::from_slice(proof_input_out_point.as_slice()).unwrap();
+    let claim_witness = populate_claim_witness(
+        &proof_cell_out_point_for_witness,
+        &subscriber_lock_hash,
+        &merkle_proof,
+    );
+
+    let witness_for_dist = WitnessArgs::new_builder()
+        .lock(Some(claim_witness.as_bytes()).pack())
+        .build();
+
+    // build transaction
+    let tx = TransactionBuilder::default()
+        .cell_dep(always_success_dep)
+        .cell_dep(dist_script_dep)
+        .cell_dep(proof_script_dep)
+        .inputs([dist_input, proof_input])
+        .outputs([reward_output])
+        .outputs_data([Bytes::new()].pack())
+        .witness(witness_for_dist.as_bytes().pack())
+        .build();
+
+    let tx = context.complete_tx(tx);
+
+    // run
+    let cycles = context
+        .verify_tx(&tx, 10_000_000)
+        .expect("pass verification");
+    println!(
+        "consume cycles for distribution final claim no dust: {}",
+        cycles
+    );
 }
 
 #[test]
@@ -190,7 +458,7 @@ fn test_create_proof() {
     // lock scripts
     let subscriber_lock_script = context
         .build_script(&always_success_out_point, Default::default())
-        .expect("script");
+        .unwrap();
     let subscriber_lock_hash =
         Byte32::from_slice(subscriber_lock_script.calc_script_hash().as_slice()).unwrap();
 
@@ -213,7 +481,7 @@ fn test_create_proof() {
             &proof_out_point,
             Bytes::copy_from_slice(&calculate_type_id(&input, 0)),
         )
-        .expect("script");
+        .unwrap();
 
     // prepare outputs data
     let campaign_id = Byte32::from_slice(&[2; 32]).unwrap();
@@ -233,10 +501,8 @@ fn test_create_proof() {
         .cell_dep(proof_cell_dep)
         .cell_dep(always_success_dep)
         .input(input)
-        .output(proof_output)
-        .output(change_output)
-        .output_data(proof_data.as_bytes().pack())
-        .output_data(Bytes::from("").pack())
+        .outputs([proof_output, change_output])
+        .outputs_data([proof_data.as_bytes(), Bytes::from("")].pack())
         .build();
     let tx = context.complete_tx(tx);
 
@@ -244,7 +510,7 @@ fn test_create_proof() {
     let cycles = context
         .verify_tx(&tx, 10_000_000)
         .expect("pass verification");
-    println!("consume cycles: {}", cycles);
+    println!("consume cycles for proof create: {}", cycles);
 }
 
 #[test]
@@ -322,10 +588,8 @@ fn test_create_vault() {
         .cell_dep(always_success_dep)
         .cell_dep(vault_cell_dep)
         .input(input)
-        .output(vault_output)
-        .output(change_output)
-        .output_data(vault_data.as_bytes().pack())
-        .output_data(Bytes::from("").pack())
+        .outputs([vault_output, change_output])
+        .outputs_data([vault_data.as_bytes(), Bytes::from("")].pack())
         .witness(WitnessArgs::new_builder().build().as_bytes().pack())
         .build();
 
@@ -335,7 +599,7 @@ fn test_create_vault() {
     let cycles = context
         .verify_tx(&tx, 10_000_000)
         .expect("pass verification");
-    println!("consume cycles for vault distribution: {}", cycles);
+    println!("consume cycles for vault create: {}", cycles);
 }
 
 #[test]
@@ -423,6 +687,7 @@ fn test_spend_vault() {
     let shard1_output = CellOutput::new_builder()
         .capacity(shard1_capacity.pack())
         .lock(dist_lock_script.clone())
+        .type_(Some(admin_lock_script.clone()).pack())
         .build();
 
     // Shard 2: 50 claimants
@@ -437,6 +702,7 @@ fn test_spend_vault() {
     let shard2_output = CellOutput::new_builder()
         .capacity(shard2_capacity.pack())
         .lock(dist_lock_script)
+        .type_(Some(admin_lock_script.clone()).pack())
         .build();
 
     // Fee Cell
@@ -451,17 +717,14 @@ fn test_spend_vault() {
         shard1_capacity + shard2_capacity + fee_capacity
     );
 
-    let outputs = [shard1_output, shard2_output, fee_output];
-    let outputs_data = [shard1_data.as_bytes(), shard2_data.as_bytes(), Bytes::new()];
-
     // build transaction
     let tx = TransactionBuilder::default()
         .cell_dep(always_success_dep)
         .cell_dep(dist_script_dep)
         .cell_dep(vault_script_dep)
         .input(vault_input)
-        .outputs(outputs)
-        .outputs_data(outputs_data.pack())
+        .outputs([shard1_output, shard2_output, fee_output])
+        .outputs_data([shard1_data.as_bytes(), shard2_data.as_bytes(), Bytes::new()].pack())
         .witness(WitnessArgs::new_builder().build().as_bytes().pack())
         .build();
 
@@ -471,7 +734,7 @@ fn test_spend_vault() {
     let cycles = context
         .verify_tx(&tx, 20_000_000)
         .expect("pass verification");
-    println!("consume cycles for vault distribution: {}", cycles);
+    println!("consume cycles for vault spend: {}", cycles);
 }
 
 #[test]
@@ -552,10 +815,8 @@ fn test_partial_refund_vault() {
         .cell_dep(always_success_dep)
         .cell_dep(vault_script_dep)
         .input(vault_input)
-        .output(vault_output)
-        .output(refund_output)
-        .output_data(vault_data.as_bytes().pack())
-        .output_data(Bytes::new().pack())
+        .outputs([vault_output, refund_output])
+        .outputs_data([vault_data.as_bytes(), Bytes::from("")].pack())
         .build();
 
     let tx = context.complete_tx(tx);
@@ -564,7 +825,7 @@ fn test_partial_refund_vault() {
     let cycles = context
         .verify_tx(&tx, 10_000_000)
         .expect("pass verification");
-    println!("consume cycles for vault refund: {}", cycles);
+    println!("consume cycles for vault partial refund: {}", cycles);
 }
 
 #[test]
@@ -650,7 +911,7 @@ fn test_full_refund_vault() {
     let cycles = context
         .verify_tx(&tx, 10_000_000)
         .expect("pass verification");
-    println!("consume cycles for vault refund: {}", cycles);
+    println!("consume cycles for vault full refund: {}", cycles);
 }
 
 #[test]

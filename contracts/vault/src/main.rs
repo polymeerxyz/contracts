@@ -18,6 +18,7 @@ ckb_std::default_alloc!(16384, 1258306, 64);
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::prelude::*,
+    debug,
     high_level::{
         load_cell, load_cell_data, load_cell_lock, load_cell_lock_hash, load_cell_type_hash,
         load_script, QueryIter,
@@ -41,6 +42,8 @@ pub fn program_entry() -> i8 {
 }
 
 fn entry() -> Result<(), Error> {
+    debug!("vault contract is executing");
+
     let inputs_count = QueryIter::new(load_cell, Source::GroupInput).count();
     let outputs_count = QueryIter::new(load_cell, Source::GroupOutput).count();
 
@@ -118,6 +121,14 @@ fn verify_distribution(context: &VmContext, dist_lock_code_hash: &[u8; 32]) -> R
 
         if output_lock.code_hash().as_slice() == dist_lock_code_hash {
             // This is a Distribution Shard Cell.
+
+            // The type script of a Distribution Shard Cell must exist and its args must be the admin's lock hash.
+            let type_script_hash =
+                load_cell_type_hash(i, Source::Output)?.ok_or(BizError::MissingInfoTypeScript)?;
+            if type_script_hash != context.admin_lock_hash.as_ref() {
+                Err(BizError::InvalidInfoTypeArgs)?;
+            }
+
             total_dist_capacity_sum += output_capacity;
 
             // Validate its data is consistent with the vault.

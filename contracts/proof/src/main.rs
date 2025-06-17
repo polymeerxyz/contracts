@@ -17,6 +17,7 @@ ckb_std::default_alloc!(16384, 1258306, 64);
 
 use ckb_std::{
     ckb_constants::Source,
+    debug,
     high_level::{load_cell, load_cell_data, load_cell_lock_hash, QueryIter},
     type_id::check_type_id,
 };
@@ -32,6 +33,8 @@ pub fn program_entry() -> i8 {
 }
 
 fn entry() -> Result<(), Error> {
+    debug!("proof contract is executing");
+
     check_type_id(0)?;
 
     let inputs_count = QueryIter::new(load_cell, Source::GroupInput).count();

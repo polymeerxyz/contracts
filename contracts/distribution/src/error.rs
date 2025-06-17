@@ -28,6 +28,10 @@ pub enum BizError {
     InvalidWitnessData,
     MissingProofCell,
     MissingRewardCell,
+    InvalidInfoTypeArgs,
+    InvalidAdminRefundAmount,
+    MissingAdminRefundCell,
+    MissingInfoTypeScript,
 }
 
 impl From<SysError> for Error {

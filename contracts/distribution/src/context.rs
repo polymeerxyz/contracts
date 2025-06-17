@@ -1,7 +1,7 @@
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::{packed::Script, prelude::Unpack},
-    high_level::{load_cell, load_cell_data, load_script, load_witness_args},
+    high_level::{load_cell, load_cell_data, load_cell_type_hash, load_script, load_witness_args},
 };
 use common::schema::distribution::{ClaimWitness, DistributionCellData};
 use molecule::prelude::Entity;
@@ -9,6 +9,7 @@ use molecule::prelude::Entity;
 use crate::error::{BizError, Error};
 
 pub struct VmContext {
+    pub admin_lock_hash: [u8; 32],
     pub claim_witness: ClaimWitness,
     pub dist_capacity: u64,
     pub dist_data: DistributionCellData,
@@ -32,7 +33,11 @@ pub fn load_context() -> Result<VmContext, Error> {
     let claim_witness =
         ClaimWitness::from_slice(&witness_args_bytes).map_err(|_| BizError::InvalidWitnessData)?;
 
+    let admin_lock_hash =
+        load_cell_type_hash(0, Source::GroupInput)?.ok_or(BizError::MissingInfoTypeScript)?;
+
     Ok(VmContext {
+        admin_lock_hash,
         claim_witness,
         dist_capacity: dist_input.capacity().unpack(),
         dist_data,

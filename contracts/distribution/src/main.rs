@@ -19,6 +19,7 @@ use ckb_hash::new_blake2b;
 use ckb_std::{
     ckb_constants::Source,
     ckb_types::prelude::*,
+    debug,
     high_level::{
         load_cell, load_cell_data, load_cell_lock_hash, load_cell_type_hash, load_input_out_point,
         QueryIter,
@@ -41,6 +42,8 @@ pub fn program_entry() -> i8 {
 }
 
 fn entry() -> Result<(), Error> {
+    debug!("distribution contract is executing");
+
     // A claim transaction can only spend one Distribution Shard Cell at a time.
     // This is implicitly checked by `load_context` which loads from `Source::GroupInput` at index 0.
     // A claim transaction can create 0 (final claim) or 1 (normal claim) new Distribution Shard Cells.
@@ -71,12 +74,6 @@ fn verify_merkle_proof(
     // Verify the merkle path
     let mut computed_hash = leaf_hash;
     for sibling_hash in witness.merkle_proof().into_iter() {
-        // Validate sibling hash is not all zeros (invalid hash)
-        let is_valid_hash = sibling_hash.as_slice().iter().any(|&b| b != 0);
-        if !is_valid_hash {
-            Err(BizError::InvalidMerkleProof)?;
-        }
-
         // Compute parent hash by concatenating and hashing the two child hashes
         let mut parent_hasher = new_blake2b();
         if computed_hash.as_ref() < sibling_hash.as_slice() {
@@ -150,73 +147,126 @@ fn verify_proof_cell(
 /// Verifies the transaction's outputs (Reward Cell and new Distribution Shard Cell).
 fn verify_outputs(context: &VmContext) -> Result<(), Error> {
     let reward_amount = context.dist_data.uniform_reward_amount().unpack();
-
-    // Check if this is the final claim (no capacity left for another reward)
-    let is_final_claim = context.dist_capacity == reward_amount;
-
-    // For final claim: only reward cell
-    // For normal claim: reward cell + new distribution cell
-    let expected_output_count = if is_final_claim { 1 } else { 2 };
+    let script_hash = context.script.calc_script_hash();
     let total_output_count = QueryIter::new(load_cell, Source::Output).count();
 
-    if total_output_count != expected_output_count {
-        Err(BizError::InvalidClaimTransaction)?;
+    // Find if a new distribution shard cell is created
+    let new_dist_cell_output_indices: alloc::vec::Vec<_> =
+        QueryIter::new(load_cell, Source::Output)
+            .enumerate()
+            .filter(|(_i, cell)| {
+                cell.lock().calc_script_hash().as_bytes() == script_hash.as_bytes()
+            })
+            .map(|(i, _cell)| i)
+            .collect();
+
+    if new_dist_cell_output_indices.len() > 1 {
+        // Cannot create more than one new shard cell
+        debug!("1");
+        return Err(BizError::InvalidClaimTransaction.into());
     }
 
-    let mut reward_cell_found = false;
-    let mut new_dist_cell_found = false;
+    if !new_dist_cell_output_indices.is_empty() {
+        // --- NORMAL CLAIM ---
+        let index = new_dist_cell_output_indices[0];
 
-    let script_hash = context.script.calc_script_hash();
-    let expected_reward_lock_hash = context.claim_witness.subscriber_lock_hash();
+        // Expect 2 outputs: reward cell and new dist cell.
+        if total_output_count != 2 {
+            debug!("2");
+            return Err(BizError::InvalidClaimTransaction.into());
+        }
 
-    for i in 0..total_output_count {
-        let output_cell = load_cell(i, Source::Output)?;
-        let output_lock_hash = load_cell_lock_hash(i, Source::Output)?;
+        // Verify the new shard cell
+        let output_cell = load_cell(index, Source::Output)?;
         let output_cell_capacity: u64 = output_cell.capacity().unpack();
 
-        if output_lock_hash == expected_reward_lock_hash.as_slice() {
-            if reward_cell_found {
-                Err(BizError::InvalidClaimTransaction)?;
-            }
-            if output_cell_capacity != reward_amount {
-                Err(BizError::InvalidRewardAmount)?;
-            }
-            reward_cell_found = true;
-        } else if output_lock_hash == script_hash.as_slice() {
-            if is_final_claim {
-                Err(BizError::InvalidFinalClaim)?;
-            }
-            if new_dist_cell_found {
-                Err(BizError::InvalidClaimTransaction)?;
-            }
-
-            // Verify the new shard cell is a perfect, capacity-reduced clone.
-            let input_type_hash = load_cell_type_hash(0, Source::GroupInput)?;
-            let output_type_hash = load_cell_type_hash(i, Source::Output)?;
-            if input_type_hash != output_type_hash {
-                Err(BizError::InvalidTypeScriptUpdate)?;
-            }
-
-            let input_data = load_cell_data(0, Source::GroupInput)?;
-            let output_data = load_cell_data(i, Source::Output)?;
-            if input_data != output_data {
-                Err(BizError::InvalidShardDataUpdate)?;
-            }
-
-            if output_cell_capacity != context.dist_capacity - reward_amount {
-                Err(BizError::InvalidShardCapacity)?;
-            }
-            new_dist_cell_found = true;
-        } else {
-            Err(BizError::InvalidClaimTransaction)?;
+        let input_type_hash = load_cell_type_hash(0, Source::GroupInput)?;
+        let output_type_hash = load_cell_type_hash(index, Source::Output)?;
+        if input_type_hash != output_type_hash {
+            return Err(BizError::InvalidTypeScriptUpdate.into());
         }
-    }
 
-    if !reward_cell_found {
-        Err(BizError::MissingRewardCell)?;
-    }
-    if !is_final_claim && !new_dist_cell_found {
-        Err(BizError::InvalidClaimTransaction)?;
+        let input_data = load_cell_data(0, Source::GroupInput)?;
+        let output_data = load_cell_data(index, Source::Output)?;
+        if input_data != output_data {
+            return Err(BizError::InvalidShardDataUpdate.into());
+        }
+
+        if output_cell_capacity != context.dist_capacity - reward_amount {
+            return Err(BizError::InvalidShardCapacity.into());
+        }
+
+        // Find and verify the reward cell.
+        let mut reward_cell_found = false;
+        for i in 0..total_output_count {
+            if i == index {
+                continue;
+            } // Skip the new dist cell
+            let reward_cell = load_cell(i, Source::Output)?;
+            let reward_lock_hash = load_cell_lock_hash(i, Source::Output)?;
+            if reward_lock_hash == context.claim_witness.subscriber_lock_hash().as_slice() {
+                let reward_cell_capacity: u64 = reward_cell.capacity().unpack();
+                if reward_cell_capacity != reward_amount {
+                    return Err(BizError::InvalidRewardAmount.into());
+                }
+                reward_cell_found = true;
+            } else {
+                // Some other unexpected cell
+                debug!("3");
+                return Err(BizError::InvalidClaimTransaction.into());
+            }
+        }
+        if !reward_cell_found {
+            return Err(BizError::MissingRewardCell.into());
+        }
+    } else {
+        // --- FINAL CLAIM ---
+        let dust_capacity = context.dist_capacity - reward_amount;
+
+        let expected_output_count = if dust_capacity > 0 { 2 } else { 1 };
+        if total_output_count != expected_output_count {
+            debug!("4");
+            return Err(BizError::InvalidClaimTransaction.into());
+        }
+
+        let mut reward_cell_found = false;
+        let mut admin_refund_cell_found = false;
+
+        for i in 0..total_output_count {
+            let output_cell = load_cell(i, Source::Output)?;
+            let output_lock_hash = load_cell_lock_hash(i, Source::Output)?;
+            let capacity: u64 = output_cell.capacity().unpack();
+
+            if output_lock_hash == context.claim_witness.subscriber_lock_hash().as_slice() {
+                if reward_cell_found {
+                    debug!("5");
+                    return Err(BizError::InvalidClaimTransaction.into());
+                }
+                if capacity != reward_amount {
+                    return Err(BizError::InvalidRewardAmount.into());
+                }
+                reward_cell_found = true;
+            } else if output_lock_hash == context.admin_lock_hash.as_ref() {
+                if admin_refund_cell_found {
+                    debug!("6");
+                    return Err(BizError::InvalidClaimTransaction.into());
+                }
+                if capacity != dust_capacity {
+                    return Err(BizError::InvalidAdminRefundAmount.into());
+                }
+                admin_refund_cell_found = true;
+            } else {
+                debug!("7");
+                return Err(BizError::InvalidClaimTransaction.into());
+            }
+        }
+
+        if !reward_cell_found {
+            return Err(BizError::MissingRewardCell.into());
+        }
+        if dust_capacity > 0 && !admin_refund_cell_found {
+            return Err(BizError::MissingAdminRefundCell.into());
+        }
     }
 
     Ok(())
