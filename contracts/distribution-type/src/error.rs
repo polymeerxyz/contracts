@@ -11,23 +11,33 @@ pub enum Error {
 #[derive(Debug)]
 #[repr(i8)]
 pub enum BizError {
-    InvalidCampaignId = 20,
-    InvalidClaimTransaction,
-    InvalidDistributionData,
-    InvalidFinalClaim,
-    InvalidMerkleProof,
-    InvalidProofCellCount,
-    InvalidProofData,
-    InvalidProofLockHash,
-    InvalidRewardAmount,
-    InvalidRewardLockHash,
-    InvalidShardCapacity,
-    InvalidShardDataUpdate,
-    InvalidSubscriberLockHash,
-    InvalidTypeScriptUpdate,
-    InvalidWitnessData,
-    MissingProofCell,
-    MissingRewardCell,
+    // General
+    DistributionTransactionInvalid = 20,
+    WitnessDataInvalid,
+
+    // Creation
+    ShardCreationDataInvalid,
+    ShardCreationDataInconsistent,
+
+    // Claim
+    ClaimTransactionInvalid,
+    FinalClaimCapacityInvalid,
+    ProofCellCountInvalid,
+    ProofDataInvalid,
+    ProofCampaignIdMismatch,
+    ProofSubscriberLockHashMismatch,
+    ProofLockHashMismatch,
+    ProofOutPointMismatch,
+    RewardCapacityInvalid,
+    RewardLockHashMismatch,
+    ShardCapacityUpdateInvalid,
+    ShardDataUpdateImmutable,
+    ShardTypeScriptImmutable,
+
+    // Reclamation
+    ReclamationSinceInvalid,
+    ReclamationLockHashMismatch,
+    ReclamationCapacityMismatch,
 }
 
 impl From<SysError> for Error {

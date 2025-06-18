@@ -1,5 +1,5 @@
 [package]
-name = "distribution"
+name = "distribution-type"
 version = "0.1.0"
 edition = "2021"
 
@@ -8,7 +8,6 @@ common = { path = "../../crates/common", default-features = false, features = [
   "distribution",
   "proof",
 ] }
-ckb-hash = { workspace = true, features = ["ckb-contract"] }
 ckb-std.workspace = true
 molecule = { workspace = true, features = ["bytes_vec"] }
 
