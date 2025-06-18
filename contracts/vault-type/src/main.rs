@@ -19,7 +19,7 @@ use ckb_std::{
     ckb_constants::Source,
     ckb_types::prelude::*,
     debug,
-    high_level::{load_cell, load_cell_data, load_cell_lock_hash, load_script, QueryIter},
+    high_level::{load_cell, load_cell_data, load_script, QueryIter},
 };
 use common::{
     schema::{distribution::DistributionCellData, vault::VaultCellData},
@@ -65,7 +65,7 @@ fn entry() -> Result<(), Error> {
             dist_lock_code_hash.copy_from_slice(&args.raw_data()[0..32]);
 
             let is_distribution_action = QueryIter::new(load_cell, Source::Output)
-                .any(|cell| cell.lock().code_hash().as_slice() == dist_lock_code_hash.as_ref());
+                .any(|cell| cell.lock().code_hash().as_slice() == dist_lock_code_hash);
 
             if is_distribution_action {
                 let mut dist_type_code_hash = [0u8; 32];
@@ -92,8 +92,8 @@ fn verify_creation() -> Result<(), Error> {
     let vault_data =
         VaultCellData::from_slice(&vault_data_bytes).map_err(|_| BizError::VaultDataInvalid)?;
 
-    let fee_percentage_unpacked: u16 = vault_data.fee_percentage().unpack();
-    if fee_percentage_unpacked > 10000 {
+    let fee_percentage: u16 = vault_data.fee_percentage().unpack();
+    if fee_percentage > 10000 {
         Err(BizError::FeePercentageOutOfRange)?;
     }
 
@@ -117,92 +117,89 @@ fn verify_distribution(
     dist_lock_code_hash: &[u8; 32],
     dist_type_code_hash: &[u8; 32],
 ) -> Result<(), Error> {
-    let fee_percent: u128 = context.vault_data.fee_percentage().unpack().into();
-    if fee_percent > 10000 {
+    // 1. Calculate expected fee
+    let fee_percentage: u128 = context.vault_data.fee_percentage().unpack().into();
+    if fee_percentage > 10000 {
         Err(BizError::FeePercentageOutOfRange)?;
     }
-
     let total_capacity = context.vault_capacity;
-    let expected_fee_capacity = (total_capacity as u128 * fee_percent / 10000) as u64;
+    let expected_fee_capacity = (total_capacity as u128 * fee_percentage / 10000) as u64;
 
     if total_capacity < expected_fee_capacity {
-        debug!("1");
         Err(BizError::VaultTransactionInvalid)?;
     }
 
+    // 2. Find and validate all distribution shards in outputs.
     let mut total_dist_shards_capacity: u64 = 0;
-    let mut total_fee_capacity: u64 = 0;
     let mut uniform_reward_amount: Option<u64> = None;
 
-    let output_count = QueryIter::new(load_cell, Source::Output).count();
-    if output_count < 2 {
-        debug!("2");
-        Err(BizError::VaultTransactionInvalid)?;
-    }
+    let dist_shards = QueryIter::new(load_cell, Source::Output)
+        .enumerate()
+        .filter(|(_i, cell)| cell.lock().code_hash().as_slice() == dist_lock_code_hash);
 
-    for i in 0..output_count {
-        let output_cell = load_cell(i, Source::Output)?;
-        let output_lock = output_cell.lock();
-        let output_capacity: u64 = output_cell.capacity().unpack();
-
-        if output_lock.code_hash().as_slice() == dist_lock_code_hash {
-            // distribution cell
-            if let Some(type_script) = output_cell.type_().to_opt() {
-                // distribution cell must have both lock and type binding to distribution contracts
-                if type_script.code_hash().as_slice() != dist_type_code_hash {
-                    Err(BizError::DistributionDataInvalid)?;
-                }
-            } else {
+    for (i, shard_cell) in dist_shards {
+        // Check for distribution type script
+        if let Some(type_script) = shard_cell.type_().to_opt() {
+            if type_script.code_hash().as_slice() != dist_type_code_hash {
                 Err(BizError::DistributionDataInvalid)?;
-            }
-
-            total_dist_shards_capacity += output_capacity;
-
-            let shard_data_bytes = load_cell_data(i, Source::Output)?;
-            let shard_data = DistributionCellData::from_slice(&shard_data_bytes)
-                .map_err(|_| BizError::DistributionDataInvalid)?;
-
-            // Validate data consistency.
-            if shard_data.campaign_id().as_bytes() != context.vault_data.campaign_id().as_bytes()
-                || shard_data.proof_script_code_hash().as_bytes()
-                    != context.vault_data.proof_script_code_hash().as_bytes()
-                || shard_data.admin_lock_hash().as_slice() != context.admin_lock_hash.as_ref()
-            {
-                Err(BizError::DistributionDataInvalid)?;
-            }
-
-            let uniform_reward_amount_unpacked: u64 = shard_data.uniform_reward_amount().unpack();
-            if uniform_reward_amount_unpacked == 0 {
-                Err(BizError::ShardRewardInconsistent)?;
-            }
-
-            if let Some(first_amount) = uniform_reward_amount {
-                if first_amount != uniform_reward_amount_unpacked {
-                    Err(BizError::ShardRewardInconsistent)?;
-                }
-            } else {
-                uniform_reward_amount = Some(uniform_reward_amount_unpacked);
             }
         } else {
-            // fee cell
-            let output_lock_hash = load_cell_lock_hash(i, Source::Output)?;
-            if output_lock_hash == context.admin_lock_hash {
-                if total_fee_capacity > 0 {
-                    debug!("3");
-                    Err(BizError::VaultTransactionInvalid)?;
-                }
-                total_fee_capacity += output_capacity;
-            } else {
-                Err(BizError::VaultActionUnknown)?;
+            Err(BizError::DistributionDataInvalid)?;
+        }
+
+        let shard_capacity: u64 = shard_cell.capacity().unpack();
+        total_dist_shards_capacity += shard_capacity;
+
+        let shard_data_bytes = load_cell_data(i, Source::Output)?;
+        let shard_data = DistributionCellData::from_slice(&shard_data_bytes)
+            .map_err(|_| BizError::DistributionDataInvalid)?;
+
+        // Validate data consistency.
+        if shard_data.campaign_id().as_bytes() != context.vault_data.campaign_id().as_bytes()
+            || shard_data.proof_script_code_hash().as_bytes()
+                != context.vault_data.proof_script_code_hash().as_bytes()
+            || shard_data.admin_lock_hash().as_slice() != context.admin_lock_hash
+        {
+            Err(BizError::DistributionDataInvalid)?;
+        }
+
+        let current_shard_reward: u64 = shard_data.uniform_reward_amount().unpack();
+        if current_shard_reward == 0 {
+            Err(BizError::ShardRewardInconsistent)?;
+        }
+
+        if let Some(first_amount) = uniform_reward_amount {
+            if first_amount != current_shard_reward {
+                Err(BizError::ShardRewardInconsistent)?;
             }
+        } else {
+            uniform_reward_amount = Some(current_shard_reward);
         }
     }
 
-    if total_dist_shards_capacity + total_fee_capacity != total_capacity {
+    if total_dist_shards_capacity == 0 {
+        // Must create at least one shard
+        Err(BizError::VaultTransactionInvalid)?;
+    }
+
+    // 3. Verify capacity partitioning
+    if total_dist_shards_capacity + expected_fee_capacity != total_capacity {
         Err(BizError::DistributionCapacityMismatch)?;
     }
 
-    if total_fee_capacity != expected_fee_capacity {
+    // 4. Find and validate the fee cell.
+    let fee_cells_found = QueryIter::new(load_cell, Source::Output)
+        .filter(|cell| {
+            let lock_hash = cell.lock().calc_script_hash();
+            let capacity: u64 = cell.capacity().unpack();
+            lock_hash.as_slice() == context.admin_lock_hash
+                && capacity == expected_fee_capacity
+                && cell.type_().to_opt().is_none()
+        })
+        .collect::<alloc::vec::Vec<_>>();
+
+    if fee_cells_found.len() != 1 {
+        // Must be exactly one cell matching the fee criteria.
         Err(BizError::FeeCapacityMismatch)?;
     }
 
@@ -217,17 +214,17 @@ fn verify_partial_refund(context: &VmContext) -> Result<(), Error> {
         Err(BizError::VaultDataImmutable)?;
     }
 
-    let vault_capaciy_unpacked: u64 = output_vault_cell.capacity().unpack();
-    if vault_capaciy_unpacked >= context.vault_capacity {
+    let output_vault_capacity: u64 = output_vault_cell.capacity().unpack();
+    if output_vault_capacity >= context.vault_capacity {
         Err(BizError::PartialRefundInvalid)?;
     }
 
-    let expected_refund_capacity = context.vault_capacity - vault_capaciy_unpacked;
+    let expected_refund_capacity = context.vault_capacity - output_vault_capacity;
 
     let creator_lock_hash: [u8; 32] = context.vault_data.creator_lock_hash().into();
 
     let refund_cells_found = QueryIter::new(load_cell, Source::Output)
-        .filter(|cell| cell.lock().calc_script_hash().as_slice() == creator_lock_hash.as_ref())
+        .filter(|cell| cell.lock().calc_script_hash().as_slice() == creator_lock_hash)
         .collect::<alloc::vec::Vec<_>>();
 
     if refund_cells_found.len() != 1 {
@@ -235,9 +232,9 @@ fn verify_partial_refund(context: &VmContext) -> Result<(), Error> {
     }
 
     let refund_cell = &refund_cells_found[0];
-    let refund_capacity: u64 = refund_cell.capacity().unpack();
+    let actual_refund_capacity: u64 = refund_cell.capacity().unpack();
 
-    if refund_capacity != expected_refund_capacity {
+    if actual_refund_capacity != expected_refund_capacity {
         Err(BizError::DistributionCapacityMismatch)?;
     }
 
@@ -252,7 +249,7 @@ fn verify_full_refund(context: &VmContext) -> Result<(), Error> {
     let creator_lock_hash: [u8; 32] = context.vault_data.creator_lock_hash().into();
 
     let refund_cells_found = QueryIter::new(load_cell, Source::Output)
-        .filter(|cell| cell.lock().calc_script_hash().as_slice() == creator_lock_hash.as_ref())
+        .filter(|cell| cell.lock().calc_script_hash().as_slice() == creator_lock_hash)
         .collect::<alloc::vec::Vec<_>>();
 
     if refund_cells_found.len() != 1 {
@@ -260,9 +257,9 @@ fn verify_full_refund(context: &VmContext) -> Result<(), Error> {
     }
 
     let refund_cell = &refund_cells_found[0];
-    let refund_capacity: u64 = refund_cell.capacity().unpack();
+    let actual_refund_capacity: u64 = refund_cell.capacity().unpack();
 
-    if refund_capacity != context.vault_capacity {
+    if actual_refund_capacity != context.vault_capacity {
         Err(BizError::DistributionCapacityMismatch)?;
     }
 

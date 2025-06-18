@@ -67,10 +67,13 @@ fn verify_creation() -> Result<(), Error> {
         Err(BizError::ProofHashInvalid)?;
     }
 
+    if proof_data.subscriber_lock_hash().as_slice() == NULL_HASH {
+        Err(BizError::SubscriberLockHashInvalid)?;
+    }
+
     // 3. Check lock hash is correct.
     let actual_lock_hash = load_cell_lock_hash(0, Source::GroupOutput)?;
     if proof_data.subscriber_lock_hash().as_slice() != actual_lock_hash {
-        // We can reuse this error code as it indicates a mismatch related to the lock.
         Err(BizError::SubscriberLockHashMismatch)?;
     }
 
@@ -80,6 +83,8 @@ fn verify_creation() -> Result<(), Error> {
 fn verify_consumption() -> Result<(), Error> {
     // When a Proof Cell is consumed, we don't need additional validation
     // beyond what's already enforced by the transaction structure checks.
-    // The cell is being destroyed, which is allowed.
+    // The cell is being destroyed, which is allowed. The user who owns the cell
+    // can choose to do this to reclaim the CKB capacity, forgoing their
+    // right to claim a reward.
     Ok(())
 }

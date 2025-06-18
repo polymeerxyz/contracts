@@ -122,7 +122,8 @@ fn verify_creation(outputs_count: usize) -> Result<(), Error> {
         Err(BizError::ShardCreationDataInvalid)?;
     }
 
-    if first_shard_data.merkle_root().as_slice() == NULL_HASH {
+    let merkle_root = first_shard_data.merkle_root();
+    if merkle_root.as_slice() == NULL_HASH {
         Err(BizError::ShardCreationDataInvalid)?;
     }
 
@@ -219,12 +220,8 @@ fn verify_claim_update(
 
     let input_dist_cell = load_cell(0, Source::GroupInput)?;
     let input_capacity: u64 = input_dist_cell.capacity().unpack();
-    let reward_amount_unpacked = dist_data.uniform_reward_amount().unpack();
+    let reward_amount_unpacked: u64 = dist_data.uniform_reward_amount().unpack();
     let expected_reward_capacity = reward_amount_unpacked + proof_cell_capacity;
-
-    if QueryIter::new(load_cell, Source::Output).count() != 2 {
-        Err(BizError::ClaimTransactionInvalid)?;
-    }
 
     let expected_reward_lock_hash: [u8; 32] = claim_witness.subscriber_lock_hash().into();
     let script_hash = load_script()?.calc_script_hash();
@@ -232,20 +229,26 @@ fn verify_claim_update(
     let mut reward_cell_found = false;
     let mut new_shard_cell_found = false;
 
-    for i in 0..2 {
+    // Iterate over all outputs to find the required reward cell and new shard cell.
+    // This allows for other outputs, such as a change cell for the claimant.
+    for i in 0..QueryIter::new(load_cell, Source::Output).count() {
         let output_cell = load_cell(i, Source::Output)?;
+        let output_lock_hash = load_cell_lock_hash(i, Source::Output)?;
         let output_capacity: u64 = output_cell.capacity().unpack();
 
-        if load_cell_lock_hash(i, Source::Output)? == expected_reward_lock_hash {
+        if output_lock_hash == expected_reward_lock_hash
+            && output_capacity == expected_reward_capacity
+            && output_cell.type_().to_opt().is_none()
+        {
+            // This is the claimant's reward cell.
             if reward_cell_found {
+                // Cannot have more than one reward cell.
                 Err(BizError::ClaimTransactionInvalid)?;
-            }
-            if output_capacity != expected_reward_capacity {
-                Err(BizError::RewardCapacityInvalid)?;
             }
             reward_cell_found = true;
         } else if let Some(type_script) = output_cell.type_().to_opt() {
             if type_script.calc_script_hash() == script_hash {
+                // This is the updated distribution shard cell.
                 if new_shard_cell_found {
                     Err(BizError::ClaimTransactionInvalid)?;
                 }
@@ -261,6 +264,7 @@ fn verify_claim_update(
                 new_shard_cell_found = true;
             }
         }
+        // Any other cell is considered a change cell and is ignored.
     }
 
     if !reward_cell_found || !new_shard_cell_found {
@@ -275,9 +279,6 @@ fn verify_destruction(dist_data: &DistributionCellData, since: u64) -> Result<()
         Ok(witness_args) => {
             // Final Claim
             if since != 0 {
-                Err(BizError::ClaimTransactionInvalid)?;
-            }
-            if QueryIter::new(load_cell, Source::Output).count() != 1 {
                 Err(BizError::ClaimTransactionInvalid)?;
             }
 
@@ -297,14 +298,29 @@ fn verify_destruction(dist_data: &DistributionCellData, since: u64) -> Result<()
                 Err(BizError::FinalClaimCapacityInvalid)?;
             }
 
+            let expected_reward_lock_hash: [u8; 32] = claim_witness.subscriber_lock_hash().into();
             let expected_reward_capacity = reward_amount_unpacked + proof_cell_capacity;
-            let output_capacity: u64 = load_cell(0, Source::Output)?.capacity().unpack();
-            if output_capacity != expected_reward_capacity {
-                Err(BizError::RewardCapacityInvalid)?;
+
+            let mut reward_cell_found = false;
+            for i in 0..QueryIter::new(load_cell, Source::Output).count() {
+                let output_cell = load_cell(i, Source::Output)?;
+                let output_lock_hash = load_cell_lock_hash(i, Source::Output)?;
+                let output_capacity: u64 = output_cell.capacity().unpack();
+
+                if output_lock_hash == expected_reward_lock_hash
+                    && output_capacity == expected_reward_capacity
+                    && output_cell.type_().to_opt().is_none()
+                {
+                    if reward_cell_found {
+                        // Cannot have more than one reward cell.
+                        Err(BizError::ClaimTransactionInvalid)?;
+                    }
+                    reward_cell_found = true;
+                }
+                // Any other cell is considered a change cell and is ignored.
             }
 
-            let output_lock_hash = load_cell_lock_hash(0, Source::Output)?;
-            if output_lock_hash != claim_witness.subscriber_lock_hash().as_slice() {
+            if !reward_cell_found {
                 Err(BizError::RewardLockHashMismatch)?;
             }
         }
@@ -314,17 +330,31 @@ fn verify_destruction(dist_data: &DistributionCellData, since: u64) -> Result<()
             if since != (SINCE_TIMESTAMP_FLAG | deadline_unpacked) {
                 Err(BizError::ReclamationSinceInvalid)?;
             }
-            if QueryIter::new(load_cell, Source::Output).count() != 1 {
-                Err(BizError::DistributionTransactionInvalid)?;
-            }
-            let output_lock_hash = load_cell_lock_hash(0, Source::Output)?;
-            if output_lock_hash != dist_data.admin_lock_hash().as_slice() {
-                Err(BizError::ReclamationLockHashMismatch)?;
-            }
+
+            let expected_admin_lock_hash: [u8; 32] = dist_data.admin_lock_hash().into();
             let input_capacity: u64 = load_cell(0, Source::GroupInput)?.capacity().unpack();
-            let output_capacity: u64 = load_cell(0, Source::Output)?.capacity().unpack();
-            if input_capacity != output_capacity {
-                Err(BizError::ReclamationCapacityMismatch)?;
+
+            let mut reclamation_cell_found = false;
+            for i in 0..QueryIter::new(load_cell, Source::Output).count() {
+                let output_cell = load_cell(i, Source::Output)?;
+                let output_lock_hash = load_cell_lock_hash(i, Source::Output)?;
+                let output_capacity: u64 = output_cell.capacity().unpack();
+
+                if output_lock_hash == expected_admin_lock_hash
+                    && output_capacity == input_capacity
+                    && output_cell.type_().to_opt().is_none()
+                {
+                    if reclamation_cell_found {
+                        // Cannot have more than one reclamation cell.
+                        Err(BizError::DistributionTransactionInvalid)?;
+                    }
+                    reclamation_cell_found = true;
+                }
+                // Any other cell is considered a change cell and is ignored.
+            }
+
+            if !reclamation_cell_found {
+                Err(BizError::ReclamationLockHashMismatch)?;
             }
         }
     }

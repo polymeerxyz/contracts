@@ -25,6 +25,8 @@ use ckb_std::{
 use common::schema::distribution::{ClaimWitness, DistributionCellData};
 use distribution_lock::error::{BizError, Error};
 
+const MAX_MERKLE_PROOF_SIBLINGS: usize = 64;
+
 pub fn program_entry() -> i8 {
     match entry() {
         Ok(()) => 0,
@@ -68,6 +70,11 @@ fn verify_merkle_proof(
     dist_data: &DistributionCellData,
     witness: &ClaimWitness,
 ) -> Result<(), Error> {
+    // Prevent cycle exhaustion attacks by limiting proof length.
+    if witness.merkle_proof().len() > MAX_MERKLE_PROOF_SIBLINGS {
+        return Err(BizError::MerkleProofInvalid.into());
+    }
+
     // Create the leaf hash from the proof cell outpoint and subscriber lock hash
     let mut leaf_hasher = new_blake2b();
     leaf_hasher.update(&witness.proof_cell_out_point().as_bytes());

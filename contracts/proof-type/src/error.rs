@@ -20,6 +20,7 @@ pub enum BizError {
     ProofEntityIdInvalid,
     ProofCampaignIdInvalid,
     ProofHashInvalid,
+    SubscriberLockHashInvalid,
     SubscriberLockHashMismatch,
 }
 

@@ -84,6 +84,18 @@ fn test_claim_distribution() {
         .previous_output(proof_input_out_point.clone())
         .build();
 
+    // Add a cell for the subscriber to pay for fees
+    let subscriber_fee_input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity((200 * 100_000_000u64).pack())
+            .lock(subscriber_lock_script.clone())
+            .build(),
+        Bytes::new(),
+    );
+    let subscriber_fee_input = CellInput::new_builder()
+        .previous_output(subscriber_fee_input_out_point)
+        .build();
+
     // prepare Merkle Tree
     let mut leaf_data_1 = vec![];
     leaf_data_1.extend_from_slice(proof_input_out_point.as_slice());
@@ -147,6 +159,10 @@ fn test_claim_distribution() {
 
     let reward_output = CellOutput::new_builder()
         .capacity((reward_amount + proof_cell_capacity).pack())
+        .lock(subscriber_lock_script.clone())
+        .build();
+
+    let subscriber_change_output = CellOutput::new_builder()
         .lock(subscriber_lock_script)
         .build();
 
@@ -168,9 +184,9 @@ fn test_claim_distribution() {
         .cell_dep(dist_lock_dep)
         .cell_dep(dist_type_dep)
         .cell_dep(proof_script_dep)
-        .inputs([dist_input, proof_input])
-        .outputs([dist_output, reward_output])
-        .outputs_data([dist_data.as_bytes(), Bytes::from("")].pack())
+        .inputs([dist_input, proof_input, subscriber_fee_input])
+        .outputs([dist_output, reward_output, subscriber_change_output])
+        .outputs_data([dist_data.as_bytes(), Bytes::from(""), Bytes::from("")].pack())
         .witness(witness_for_dist.as_bytes().pack())
         .build();
     let tx = context.complete_tx(tx);
@@ -242,6 +258,18 @@ fn test_final_claim_distribution_no_dust() {
         .previous_output(proof_input_out_point.clone())
         .build();
 
+    // Add a cell for the subscriber to pay for fees
+    let subscriber_fee_input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity((200 * 100_000_000u64).pack())
+            .lock(subscriber_lock_script.clone())
+            .build(),
+        Bytes::new(),
+    );
+    let subscriber_fee_input = CellInput::new_builder()
+        .previous_output(subscriber_fee_input_out_point)
+        .build();
+
     // prepare Merkle Tree (only one leaf for final claim)
     let mut leaf_data = vec![];
     leaf_data.extend_from_slice(proof_input_out_point.as_slice());
@@ -286,6 +314,10 @@ fn test_final_claim_distribution_no_dust() {
     // prepare outputs
     let reward_output = CellOutput::new_builder()
         .capacity((reward_amount + proof_cell_capacity).pack())
+        .lock(subscriber_lock_script.clone())
+        .build();
+
+    let subscriber_change_output = CellOutput::new_builder()
         .lock(subscriber_lock_script)
         .build();
 
@@ -307,9 +339,9 @@ fn test_final_claim_distribution_no_dust() {
         .cell_dep(dist_lock_dep)
         .cell_dep(dist_type_dep)
         .cell_dep(proof_script_dep)
-        .inputs([dist_input, proof_input])
-        .outputs([reward_output])
-        .outputs_data([Bytes::new()].pack())
+        .inputs([dist_input, proof_input, subscriber_fee_input])
+        .outputs([reward_output, subscriber_change_output])
+        .outputs_data([Bytes::new(), Bytes::new()].pack())
         .witness(witness_for_dist.as_bytes().pack())
         .build();
     let tx = context.complete_tx(tx);
@@ -387,6 +419,18 @@ fn test_reclaim_distribution() {
         dist_data.as_bytes(),
     );
 
+    // Add a cell for the admin to pay for fees
+    let admin_fee_input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity((200 * 100_000_000u64).pack())
+            .lock(admin_lock_script.clone())
+            .build(),
+        Bytes::new(),
+    );
+    let admin_fee_input = CellInput::new_builder()
+        .previous_output(admin_fee_input_out_point)
+        .build();
+
     // prepare input with `since`
     let since = 0x4000_0000_0000_0000u64 | deadline_ms;
     let dist_input = CellInput::new_builder()
@@ -397,6 +441,10 @@ fn test_reclaim_distribution() {
     // prepare output (reclamation to admin)
     let reclaim_output = CellOutput::new_builder()
         .capacity(dist_capacity.pack())
+        .lock(admin_lock_script.clone())
+        .build();
+
+    let admin_change_output = CellOutput::new_builder()
         .lock(admin_lock_script)
         .build();
 
@@ -413,9 +461,9 @@ fn test_reclaim_distribution() {
         .cell_dep(dist_lock_dep)
         .cell_dep(dist_type_dep)
         .header_dep(header_dep)
-        .input(dist_input)
-        .output(reclaim_output)
-        .output_data(Bytes::new().pack())
+        .inputs([dist_input, admin_fee_input])
+        .outputs([reclaim_output, admin_change_output])
+        .outputs_data([Bytes::new().pack(), Bytes::new().pack()])
         .build();
     let tx = context.complete_tx(tx);
 
@@ -671,6 +719,18 @@ fn test_spend_vault() {
         .previous_output(vault_input_out_point)
         .build();
 
+    // Add a cell for the admin to pay for fees
+    let admin_fee_input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity((200 * 100_000_000u64).pack())
+            .lock(admin_lock_script.clone())
+            .build(),
+        Bytes::new(),
+    );
+    let admin_fee_input = CellInput::new_builder()
+        .previous_output(admin_fee_input_out_point)
+        .build();
+
     // prepare outputs
     let dist_lock_script = context
         .build_script(&dist_lock_out_point, Default::default())
@@ -718,6 +778,10 @@ fn test_spend_vault() {
     let fee_capacity = vault_capacity * (fee_percentage as u64) / 10000;
     let fee_output = CellOutput::new_builder()
         .capacity(fee_capacity.pack())
+        .lock(admin_lock_script.clone())
+        .build();
+
+    let admin_change_output = CellOutput::new_builder()
         .lock(admin_lock_script)
         .build();
 
@@ -732,9 +796,22 @@ fn test_spend_vault() {
         .cell_dep(dist_lock_dep)
         .cell_dep(dist_type_dep)
         .cell_dep(vault_script_dep)
-        .input(vault_input)
-        .outputs([shard1_output, shard2_output, fee_output])
-        .outputs_data([shard1_data.as_bytes(), shard2_data.as_bytes(), Bytes::new()].pack())
+        .inputs([vault_input, admin_fee_input])
+        .outputs([
+            shard1_output,
+            shard2_output,
+            fee_output,
+            admin_change_output,
+        ])
+        .outputs_data(
+            [
+                shard1_data.as_bytes(),
+                shard2_data.as_bytes(),
+                Bytes::new(),
+                Bytes::new(),
+            ]
+            .pack(),
+        )
         .witness(WitnessArgs::new_builder().build().as_bytes().pack())
         .build();
     let tx = context.complete_tx(tx);
@@ -815,6 +892,18 @@ fn test_partial_refund_vault() {
         .previous_output(vault_input_out_point)
         .build();
 
+    // Add a cell for the admin to pay for fees
+    let admin_fee_input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity((200 * 100_000_000u64).pack())
+            .lock(admin_lock_script.clone())
+            .build(),
+        Bytes::new(),
+    );
+    let admin_fee_input = CellInput::new_builder()
+        .previous_output(admin_fee_input_out_point)
+        .build();
+
     // prepare output
     let vault_output = CellOutput::new_builder()
         .capacity((vault_capacity - refund_capacity).pack())
@@ -825,14 +914,17 @@ fn test_partial_refund_vault() {
         .capacity(refund_capacity.pack())
         .lock(creator_lock_script)
         .build();
+    let admin_change_output = CellOutput::new_builder()
+        .lock(admin_lock_script)
+        .build();
 
     // build transaction
     let tx = TransactionBuilder::default()
         .cell_dep(always_success_dep)
         .cell_dep(vault_script_dep)
-        .input(vault_input)
-        .outputs([vault_output, refund_output])
-        .outputs_data([vault_data.as_bytes(), Bytes::from("")].pack())
+        .inputs([vault_input, admin_fee_input])
+        .outputs([vault_output, refund_output, admin_change_output])
+        .outputs_data([vault_data.as_bytes(), Bytes::from(""), Bytes::from("")].pack())
         .build();
     let tx = context.complete_tx(tx);
 
@@ -911,19 +1003,35 @@ fn test_full_refund_vault() {
         .previous_output(vault_input_out_point)
         .build();
 
+    // Add a cell for the admin to pay for fees
+    let admin_fee_input_out_point = context.create_cell(
+        CellOutput::new_builder()
+            .capacity((200 * 100_000_000u64).pack())
+            .lock(admin_lock_script.clone())
+            .build(),
+        Bytes::new(),
+    );
+    let admin_fee_input = CellInput::new_builder()
+        .previous_output(admin_fee_input_out_point)
+        .build();
+
     // prepare output
     let refund_output = CellOutput::new_builder()
         .capacity(vault_capacity.pack())
         .lock(creator_lock_script)
         .build();
 
+    let admin_change_output = CellOutput::new_builder()
+        .lock(admin_lock_script)
+        .build();
+
     // build transaction
     let tx = TransactionBuilder::default()
         .cell_dep(always_success_dep)
         .cell_dep(vault_script_dep)
-        .input(vault_input)
-        .output(refund_output)
-        .output_data(Bytes::new().pack())
+        .inputs([vault_input, admin_fee_input])
+        .outputs([refund_output, admin_change_output])
+        .outputs_data([Bytes::new().pack(), Bytes::new().pack()])
         .build();
     let tx = context.complete_tx(tx);
 
