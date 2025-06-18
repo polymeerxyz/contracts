@@ -11,19 +11,19 @@ pub enum Error {
 #[derive(Debug)]
 #[repr(i8)]
 pub enum BizError {
-    InvalidArgumentLength = 20,
-    InvalidDataStructure,
-    InvalidDistributionCapacity,
-    InvalidDistributionData,
-    InvalidFeeCapacity,
-    InvalidFeePercentage,
-    InvalidPartialRefund,
-    InvalidRefundLockHash,
-    InvalidShardRewardConsistency,
-    InvalidVaultAction,
-    InvalidVaultData,
-    InvalidVaultDataUpdate,
-    InvalidVaultTransaction,
+    ArgumentLengthInvalid = 20,
+    DataStructureInvalid,
+    DistributionCapacityMismatch,
+    DistributionDataInvalid,
+    FeeCapacityMismatch,
+    FeePercentageOutOfRange,
+    PartialRefundInvalid,
+    RefundLockHashMismatch,
+    ShardRewardInconsistent,
+    VaultActionUnknown,
+    VaultDataInvalid,
+    VaultTransactionInvalid,
+    VaultDataImmutable,
 }
 
 impl From<SysError> for Error {

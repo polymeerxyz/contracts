@@ -115,7 +115,6 @@ fn test_claim_distribution() {
         &Byte32::from_slice(proof_code_hash.as_slice()).unwrap(),
         &merkle_root,
         reward_amount,
-        0,
     );
     let dist_input_out_point = context.create_cell(
         CellOutput::new_builder()
@@ -250,7 +249,6 @@ fn test_final_claim_distribution_with_dust() {
         &Byte32::from_slice(proof_code_hash.as_slice()).unwrap(),
         &merkle_root,
         reward_amount,
-        0,
     );
     let dist_input_out_point = context.create_cell(
         CellOutput::new_builder()
@@ -390,7 +388,6 @@ fn test_final_claim_distribution_no_dust() {
         &Byte32::from_slice(proof_code_hash.as_slice()).unwrap(),
         &merkle_root,
         reward_amount,
-        0,
     );
     let dist_input_out_point = context.create_cell(
         CellOutput::new_builder()
@@ -691,7 +688,6 @@ fn test_spend_vault() {
         &proof_code_hash,
         &merkle_root,
         uniform_reward_amount,
-        0, // shard_id
     );
     let shard1_output = CellOutput::new_builder()
         .capacity(shard1_capacity.pack())
@@ -706,7 +702,6 @@ fn test_spend_vault() {
         &proof_code_hash,
         &merkle_root,
         uniform_reward_amount,
-        1, // shard_id
     );
     let shard2_output = CellOutput::new_builder()
         .capacity(shard2_capacity.pack())

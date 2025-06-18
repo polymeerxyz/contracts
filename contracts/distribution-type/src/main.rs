@@ -44,23 +44,23 @@ fn entry() -> Result<(), Error> {
     if group_inputs_count != 1 {
         // This script doesn't handle creation, only updates/consumption.
         // We could add creation logic, but for now, we'll assume it's created correctly.
-        Err(BizError::InvalidClaimTransaction)?
+        Err(BizError::ClaimTransactionInvalid)?
     }
 
     let dist_data_bytes = load_cell_data(0, Source::GroupInput)?;
     let dist_data = DistributionCellData::from_slice(&dist_data_bytes)
-        .map_err(|_| BizError::InvalidDistributionData)?;
+        .map_err(|_| BizError::DistributionDataInvalid)?;
 
     match load_witness_args(0, Source::GroupInput) {
         Ok(witness_args) => {
             let witness_args_bytes = witness_args
                 .lock()
                 .to_opt()
-                .ok_or(BizError::InvalidWitnessData)?
+                .ok_or(BizError::WitnessDataInvalid)?
                 .raw_data();
 
             let claim_witness = ClaimWitness::from_slice(&witness_args_bytes)
-                .map_err(|_| BizError::InvalidWitnessData)?;
+                .map_err(|_| BizError::WitnessDataInvalid)?;
 
             let proof_capacity = verify_and_get_proof_cell(&dist_data, &claim_witness)?;
             verify_claim_outputs(&dist_data, &claim_witness, proof_capacity)?;
@@ -92,32 +92,32 @@ fn verify_and_get_proof_cell(
         .collect::<alloc::vec::Vec<_>>();
 
     if proof_indices.len() != 1 {
-        Err(BizError::InvalidProofCellCount)?;
+        Err(BizError::ProofCellCountInvalid)?;
     }
 
     let (index, proof_capacity, proof_lock_hash) = proof_indices[0].clone();
 
     let actual_proof_outpoint = load_input_out_point(index, Source::Input)?;
     if actual_proof_outpoint.as_bytes() != claim_witness.proof_cell_out_point().as_bytes() {
-        Err(BizError::InvalidMerkleProof)?;
+        Err(BizError::ProofOutPointMismatch)?;
     }
 
     let proof_cell_data_bytes = load_cell_data(index, Source::Input)?;
-    let proof_data = ProofCellData::from_slice(&proof_cell_data_bytes)
-        .map_err(|_| BizError::InvalidProofData)?;
+    let proof_data =
+        ProofCellData::from_slice(&proof_cell_data_bytes).map_err(|_| BizError::ProofDataInvalid)?;
 
     if proof_data.campaign_id().as_bytes() != dist_data.campaign_id().as_bytes() {
-        Err(BizError::InvalidCampaignId)?;
+        Err(BizError::CampaignIdMismatch)?;
     }
 
     if proof_data.subscriber_lock_hash().as_bytes()
         != claim_witness.subscriber_lock_hash().as_bytes()
     {
-        Err(BizError::InvalidSubscriberLockHash)?;
+        Err(BizError::SubscriberLockHashMismatch)?;
     }
 
     if proof_lock_hash.as_bytes() != claim_witness.subscriber_lock_hash().as_bytes() {
-        Err(BizError::InvalidProofLockHash)?;
+        Err(BizError::ProofLockHashMismatch)?;
     }
 
     Ok(proof_capacity)
@@ -137,7 +137,7 @@ fn verify_claim_outputs(
     let expected_output_count = if is_final_claim { 1 } else { 2 };
 
     if QueryIter::new(load_cell, Source::Output).count() != expected_output_count {
-        Err(BizError::InvalidClaimTransaction)?;
+        Err(BizError::ClaimTransactionInvalid)?;
     }
     let expected_reward_lock_hash = claim_witness.subscriber_lock_hash();
 
@@ -149,53 +149,53 @@ fn verify_claim_outputs(
 
         if output_lock_hash == expected_reward_lock_hash.as_slice() {
             if reward_cell_found {
-                Err(BizError::InvalidClaimTransaction)?;
+                Err(BizError::ClaimTransactionInvalid)?;
             }
 
             let reward_cell = load_cell(i, Source::Output)?;
             let reward_capacity: u64 = reward_cell.capacity().unpack();
             if reward_capacity != expected_reward_capacity {
-                Err(BizError::InvalidRewardAmount)?;
+                Err(BizError::RewardAmountInvalid)?;
             }
             reward_cell_found = true;
         } else {
             if is_final_claim {
-                Err(BizError::InvalidFinalClaim)?;
+                Err(BizError::FinalClaimInvalid)?;
             }
 
             if new_dist_cell_found {
-                Err(BizError::InvalidClaimTransaction)?;
+                Err(BizError::ClaimTransactionInvalid)?;
             }
 
             let script_hash = load_script()?.calc_script_hash();
             let output_cell = load_cell(i, Source::Output)?;
             let output_type_hash = output_cell.type_().to_opt().map(|s| s.calc_script_hash());
             if output_type_hash != Some(script_hash) {
-                Err(BizError::InvalidTypeScriptUpdate)?;
+                Err(BizError::TypeScriptUpdateForbidden)?;
             }
 
             if output_cell.lock().as_bytes() != input_dist_cell.lock().as_bytes() {
-                Err(BizError::InvalidClaimTransaction)?;
+                Err(BizError::ClaimTransactionInvalid)?;
             }
 
             if load_cell_data(i, Source::Output)? != load_cell_data(0, Source::GroupInput)? {
-                Err(BizError::InvalidShardDataUpdate)?;
+                Err(BizError::ShardDataUpdateImmutable)?;
             }
 
             let output_capacity: u64 = output_cell.capacity().unpack();
             if output_capacity != input_capacity - reward_amount {
-                Err(BizError::InvalidShardCapacity)?;
+                Err(BizError::ShardCapacityInvalid)?;
             }
             new_dist_cell_found = true;
         }
     }
 
     if !reward_cell_found {
-        Err(BizError::MissingRewardCell)?;
+        Err(BizError::RewardCellMissing)?;
     }
 
     if !is_final_claim && !new_dist_cell_found {
-        Err(BizError::InvalidClaimTransaction)?;
+        Err(BizError::ClaimTransactionInvalid)?;
     }
 
     Ok(())
@@ -203,18 +203,18 @@ fn verify_claim_outputs(
 
 fn verify_reclamation_outputs(dist_data: &DistributionCellData) -> Result<(), Error> {
     if QueryIter::new(load_cell, Source::Output).count() != 1 {
-        Err(BizError::InvalidDistributionTransaction)?;
+        Err(BizError::DistributionTransactionInvalid)?;
     }
 
     let output_lock_hash = load_cell_lock_hash(0, Source::Output)?;
     if output_lock_hash != dist_data.admin_lock_hash().as_slice() {
-        Err(BizError::MissingAdminRefundCell)?;
+        Err(BizError::AdminRefundCellMissing)?;
     }
 
     let input_capacity: u64 = load_cell(0, Source::GroupInput)?.capacity().unpack();
     let output_capacity: u64 = load_cell(0, Source::Output)?.capacity().unpack();
     if input_capacity != output_capacity {
-        Err(BizError::InvalidAdminRefundAmount)?;
+        Err(BizError::AdminRefundAmountInvalid)?;
     }
 
     Ok(())

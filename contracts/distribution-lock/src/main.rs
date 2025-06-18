@@ -37,7 +37,7 @@ fn entry() -> Result<(), Error> {
 
     let dist_data_bytes = load_cell_data(0, Source::GroupInput)?;
     let dist_data = DistributionCellData::from_slice(&dist_data_bytes)
-        .map_err(|_| BizError::InvalidDistributionData)?;
+        .map_err(|_| BizError::DistributionDataInvalid)?;
 
     let header = load_header(0, Source::HeaderDep)?;
     let block_timestamp: u64 = header.raw().timestamp().unpack();
@@ -46,23 +46,23 @@ fn entry() -> Result<(), Error> {
     match load_witness_args(0, Source::GroupInput) {
         Ok(witness_args) => {
             if block_timestamp >= deadline_timestamp {
-                Err(BizError::InvalidClaimTime)?;
+                Err(BizError::ClaimTimeInvalid)?;
             }
 
             let witness_args_bytes = witness_args
                 .lock()
                 .to_opt()
-                .ok_or(BizError::InvalidWitnessData)?
+                .ok_or(BizError::WitnessDataInvalid)?
                 .raw_data();
 
             let claim_witness = ClaimWitness::from_slice(&witness_args_bytes)
-                .map_err(|_| BizError::InvalidWitnessData)?;
+                .map_err(|_| BizError::WitnessDataInvalid)?;
 
             verify_merkle_proof(&dist_data, &claim_witness)?;
         }
         Err(_) => {
             if block_timestamp < deadline_timestamp {
-                Err(BizError::InvalidReclaimTime)?;
+                Err(BizError::ReclaimTimeInvalid)?;
             }
 
             verify_reclamation(&dist_data)?;
@@ -99,7 +99,7 @@ fn verify_merkle_proof(
 
     // Final computed hash must match the merkle root in the distribution cell
     if computed_hash != dist_data.merkle_root().as_slice() {
-        Err(BizError::InvalidMerkleProof)?;
+        Err(BizError::MerkleProofInvalid)?;
     }
 
     Ok(())

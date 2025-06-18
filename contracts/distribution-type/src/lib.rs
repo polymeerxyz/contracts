@@ -8,5 +8,4 @@ pub use main::program_entry;
 
 extern crate alloc;
 
-pub mod context;
 pub mod error;
