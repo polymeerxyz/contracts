@@ -7,9 +7,9 @@
   },
   "dependencies": {
     "@ckb-ccc/core": "1.9.0",
+    "commander": "14.0.0",
     "dotenv": "16.5.0",
-    "nanoid": "5.1.5",
-    "yargs": "18.0.0"
+    "nanoid": "5.1.5"
   },
   "devDependencies": {
     "@eslint/js": "^9",

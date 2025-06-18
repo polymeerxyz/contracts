@@ -1,30 +1,59 @@
 {
-  "devnet": {
-    "proof": {
-      "codeHash": "0xcb9d0d45e200013b95ef7829bf89751a96cebbbb9d331295852649e1f10f66dd",
+  "devnet": {},
+  "testnet": {
+    "distribution-lock": {
+      "codeHash": "0x58258059c49e6daa8c167e14ff6cf0d0b2793b9d5dfb0a6f9fc59b9ef7d5c1cf",
       "hashType": "data1",
       "cellDeps": [
         {
           "cellDep": {
             "outPoint": {
-              "txHash": "0x8d6509750eba928c661ce13d976cc011a69cbf7359a62a9a96aaadf307936ef5",
+              "txHash": "0x94addb1e863212c02dc387a2fa6fc75741bc8a54753d80128fd422b61f132190",
               "index": 0
             },
             "depType": "code"
           }
         }
       ]
-    }
-  },
-  "testnet": {
-    "proof": {
-      "codeHash": "0x24807d6143e42072f2d0a4e4add1b61a6c169d5882da7b48a9fd7225b13d651b",
+    },
+    "distribution-type": {
+      "codeHash": "0x8795ec0236068d955841ae7be04c91e2f2afdbb77a33c019efd9de637298f30b",
       "hashType": "data1",
       "cellDeps": [
         {
           "cellDep": {
             "outPoint": {
-              "txHash": "0x3d10dd0f1722323e4de728413cf0ecbca07999332a45cbe3798d99e73fc5538c",
+              "txHash": "0x5db7f0be91d93e7c4a5f939f8033b33ec517b87fc8dd576c0defb61a5046e1fb",
+              "index": 0
+            },
+            "depType": "code"
+          }
+        }
+      ]
+    },
+    "proof-type": {
+      "codeHash": "0xd1965092fa1ff359bc7ecbd50de88b66145e8ce7e104ccc9e219812234bfa35c",
+      "hashType": "data1",
+      "cellDeps": [
+        {
+          "cellDep": {
+            "outPoint": {
+              "txHash": "0x495058a9084bec7a11d773fa633fcf66869b92b8bf171a98be6e8e1b132f19de",
+              "index": 0
+            },
+            "depType": "code"
+          }
+        }
+      ]
+    },
+    "vault-type": {
+      "codeHash": "0xed420ab3059f286fb430a9f818cfd4fe361351ac0b5f93af7ba623a4aee64e64",
+      "hashType": "data1",
+      "cellDeps": [
+        {
+          "cellDep": {
+            "outPoint": {
+              "txHash": "0x248883df559a114d29e85c96f838feea38f80812fa6a94908d65a923604dfab0",
               "index": 0
             },
             "depType": "code"

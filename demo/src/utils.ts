@@ -1,4 +1,13 @@
-import { mol, CellInput, HasherCkb, Hex, Transaction } from "@ckb-ccc/core";
+import {
+  mol,
+  CellInput,
+  HasherCkb,
+  Hex,
+  Transaction,
+  OutPoint,
+} from "@ckb-ccc/core";
+
+export const CKB_UNIT = 100_000_000n;
 
 export function logTx(tx: Transaction) {
   console.log(
@@ -20,4 +29,16 @@ export function generateTypeId(cellInput: CellInput, index: number): Hex {
   hash.update(mol.Uint64.encode(index).buffer);
   const result = hash.digest();
   return result;
+}
+
+export function getOutpoint(str: string) {
+  const [txHash, index] = str.split(":");
+  if (!txHash || !index) {
+    throw new Error("Invalid outpoint");
+  }
+
+  return OutPoint.from({
+    txHash,
+    index: `0x${parseInt(index, 10).toString(16)}`,
+  });
 }
