@@ -23,7 +23,7 @@ use ckb_std::{
 };
 use common::{schema::proof::ProofCellData, NULL_HASH};
 use molecule::prelude::Entity;
-use proof::error::{BizError, Error};
+use proof_type::error::{BizError, Error};
 
 pub fn program_entry() -> i8 {
     match entry() {
@@ -33,7 +33,7 @@ pub fn program_entry() -> i8 {
 }
 
 fn entry() -> Result<(), Error> {
-    debug!("proof contract is executing");
+    debug!("proof type contract is executing");
 
     check_type_id(0)?;
 

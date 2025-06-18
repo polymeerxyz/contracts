@@ -7,9 +7,6 @@ struct DistributionCellData {
     // The lock hash of the admin account, used for refunding dust.
     admin_lock_hash:        Byte32,
 
-    // The index of this shard (e.g., 0, 1, 2...).
-    shard_id:               Uint32,
-
     // The Merkle root hash of the list of claimants assigned to this shard.
     merkle_root:            Byte32,
 
@@ -19,6 +16,9 @@ struct DistributionCellData {
     // The pre-calculated, uniform reward amount for every claimant.
     // Stored in Shannons (1 CKB = 100,000,000 Shannons).
     uniform_reward_amount:  Uint64,
+
+    // The deadline time for claiming the reward.
+    deadline:               Uint64,
 }
 
 struct OutPoint {

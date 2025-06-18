@@ -11,25 +11,19 @@ pub enum Error {
 #[derive(Debug)]
 #[repr(i8)]
 pub enum BizError {
-    InvalidCampaignId = 20,
-    InvalidClaimTransaction,
+    InvalidArgumentLength = 20,
+    InvalidDataStructure,
+    InvalidDistributionCapacity,
     InvalidDistributionData,
-    InvalidFinalClaim,
-    InvalidMerkleProof,
-    InvalidProofCellCount,
-    InvalidProofData,
-    InvalidProofLockHash,
-    InvalidRewardAmount,
-    InvalidRewardLockHash,
-    InvalidShardCapacity,
-    InvalidShardDataUpdate,
-    InvalidSubscriberLockHash,
-    InvalidTypeScriptUpdate,
-    InvalidWitnessData,
-    MissingProofCell,
-    MissingRewardCell,
-    InvalidAdminRefundAmount,
-    MissingAdminRefundCell,
+    InvalidFeeCapacity,
+    InvalidFeePercentage,
+    InvalidPartialRefund,
+    InvalidRefundLockHash,
+    InvalidShardRewardConsistency,
+    InvalidVaultAction,
+    InvalidVaultData,
+    InvalidVaultDataUpdate,
+    InvalidVaultTransaction,
 }
 
 impl From<SysError> for Error {
@@ -52,7 +46,7 @@ impl From<CommonError> for Error {
 
 impl From<Error> for i8 {
     fn from(err: Error) -> i8 {
-        debug!("distribution error {:?}", err);
+        debug!("vault error {:?}", err);
         match err {
             Error::Sys(v) => match v {
                 SysError::IndexOutOfBound => 1,
