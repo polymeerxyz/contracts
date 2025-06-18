@@ -1,49 +1,85 @@
-import path from "path";
-import { config } from "dotenv";
-config({ path: path.resolve(".env"), override: true });
+import { program } from "commander";
+import { adminSigner, creatorSigner, subscriberSigner } from "./dependencies";
 
-import yargs from "yargs";
-import { hideBin } from "yargs/helpers";
-import { SignerCkbPrivateKey } from "@ckb-ccc/core";
-import { buildCccClient } from "./ccc-client";
 import { meltCell } from "./melt-cell";
-import { submitProof } from "./submit-proof";
-import { Network } from "../offckb.config";
-
-const cccClient = buildCccClient((process.env.NETWORK ?? "testnet") as Network);
-
-export const signer = new SignerCkbPrivateKey(
-  cccClient,
-  process.env.PRIV_KEY ?? ""
-);
-
-export const getAccount = async () => {
-  const lock = await signer.getAddressObjSecp256k1();
-  return {
-    lockScript: lock.script,
-    address: lock.toString(),
-    pubKey: signer.publicKey,
-  };
-};
+import { createProof } from "./create-proof";
+import { createVault } from "./create-vault";
+import { CKB_UNIT, getOutpoint } from "./utils";
+import { refundVault } from "./refund-vault";
+import { createDistribution } from "./create-distribution";
+import { claimDistribution } from "./claim-distribution";
 
 (async function () {
-  const argv = await yargs(hideBin(process.argv))
-    .option("submit-proof", {
-      describe: "submit a proof",
-    })
-    .option("melt-cell", {
-      describe: "melt a cell",
-    })
-    .parse();
+  program
+    .command("melt-cell")
+    .description("Melt a cell to reclaim its capacity")
+    .argument("<outpoint>", "transaction hash and index (e.g., 0x...:0)")
+    .action(async (outpointStr) => {
+      const tx = await meltCell(getOutpoint(outpointStr));
+      const result = await adminSigner.sendTransaction(tx);
+      console.log("Transaction sent:", result);
+    });
 
-  const account = await getAccount();
-  if (argv.submitProof) {
-    const tx = await submitProof(signer, account.lockScript);
-    const result = await signer.sendTransaction(tx);
-    console.log("Transaction sent:", result);
-  } else if (argv.meltCell) {
-    const tx = await meltCell(signer);
-    const result = await signer.sendTransaction(tx);
-    console.log("Transaction sent:", result);
-  }
+  program
+    .command("create-proof")
+    .description("Submit a proof cell (as subscriber)")
+    .action(async () => {
+      const tx = await createProof();
+      const result = await subscriberSigner.sendTransaction(tx);
+      console.log("Transaction sent:", result);
+    });
+
+  program
+    .command("create-vault")
+    .description(
+      "Create a new vault with a specified amount of CKB (as creator)"
+    )
+    .argument("<amount>", "amount of CKB")
+    .action(async (amountStr) => {
+      const amount = BigInt(amountStr) * CKB_UNIT;
+      const tx = await createVault(amount);
+      const result = await creatorSigner.sendTransaction(tx);
+      console.log("Transaction sent:", result);
+    });
+
+  program
+    .command("refund-vault")
+    .description("Refund a vault partially or fully (as admin)")
+    .argument("<outpoint>", "vault cell outpoint (e.g., 0x...:0)")
+    .argument("<amount>", "amount of CKB to refund")
+    .action(async (outpointStr, amountStr) => {
+      const outpoint = getOutpoint(outpointStr);
+      const amount = BigInt(amountStr) * CKB_UNIT;
+      const tx = await refundVault(outpoint, amount);
+      const result = await adminSigner.sendTransaction(tx);
+      console.log("Transaction sent:", result);
+    });
+
+  program
+    .command("create-distribution")
+    .description("Create distribution shards from a vault (as admin)")
+    .argument("<vaultOutpoint>", "vault cell outpoint (e.g., 0x...:0)")
+    .argument("<proofOutpoint>", "proof cell outpoint (e.g., 0x...:0)")
+    .action(async (vaultOutpointStr, proofOutpointStr) => {
+      const vaultOutpoint = getOutpoint(vaultOutpointStr);
+      const proofOutpoint = getOutpoint(proofOutpointStr);
+      const tx = await createDistribution(vaultOutpoint, proofOutpoint);
+      const result = await adminSigner.sendTransaction(tx);
+      console.log("Transaction sent:", result);
+    });
+
+  program
+    .command("claim-distribution")
+    .description("Claim rewards from a distribution shard (as subscriber)")
+    .argument("<distOutpoint>", "distribution cell outpoint (e.g., 0x...:0)")
+    .argument("<proofOutpoint>", "proof cell outpoint (e.g., 0x...:0)")
+    .action(async (distOutpointStr, proofOutpointStr) => {
+      const distOutpoint = getOutpoint(distOutpointStr);
+      const proofOutpoint = getOutpoint(proofOutpointStr);
+      const tx = await claimDistribution(distOutpoint, proofOutpoint);
+      const result = await subscriberSigner.sendTransaction(tx);
+      console.log("Transaction sent:", result);
+    });
+
+  program.parse();
 })();

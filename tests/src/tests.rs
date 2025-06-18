@@ -444,9 +444,7 @@ fn test_reclaim_distribution() {
         .lock(admin_lock_script.clone())
         .build();
 
-    let admin_change_output = CellOutput::new_builder()
-        .lock(admin_lock_script)
-        .build();
+    let admin_change_output = CellOutput::new_builder().lock(admin_lock_script).build();
 
     // prepare header dep for `since` and script validation
     let header = HeaderBuilder::default()
@@ -643,7 +641,7 @@ fn test_create_vault() {
 }
 
 #[test]
-fn test_spend_vault() {
+fn test_create_distribution() {
     // deploy contracts
     let mut context = Context::default();
     let vault_bin = Loader::default().load_binary("vault-type");
@@ -781,9 +779,7 @@ fn test_spend_vault() {
         .lock(admin_lock_script.clone())
         .build();
 
-    let admin_change_output = CellOutput::new_builder()
-        .lock(admin_lock_script)
-        .build();
+    let admin_change_output = CellOutput::new_builder().lock(admin_lock_script).build();
 
     assert_eq!(
         vault_capacity,
@@ -820,7 +816,7 @@ fn test_spend_vault() {
     let cycles = context
         .verify_tx(&tx, 20_000_000)
         .expect("pass verification");
-    println!("consume cycles for vault spend: {}", cycles);
+    println!("consume cycles for distribution create: {}", cycles);
 }
 
 #[test]
@@ -914,9 +910,7 @@ fn test_partial_refund_vault() {
         .capacity(refund_capacity.pack())
         .lock(creator_lock_script)
         .build();
-    let admin_change_output = CellOutput::new_builder()
-        .lock(admin_lock_script)
-        .build();
+    let admin_change_output = CellOutput::new_builder().lock(admin_lock_script).build();
 
     // build transaction
     let tx = TransactionBuilder::default()
@@ -1021,9 +1015,7 @@ fn test_full_refund_vault() {
         .lock(creator_lock_script)
         .build();
 
-    let admin_change_output = CellOutput::new_builder()
-        .lock(admin_lock_script)
-        .build();
+    let admin_change_output = CellOutput::new_builder().lock(admin_lock_script).build();
 
     // build transaction
     let tx = TransactionBuilder::default()

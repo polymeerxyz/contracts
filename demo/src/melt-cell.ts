@@ -1,17 +1,15 @@
-import { Signer, Transaction } from "@ckb-ccc/core";
+import { OutPoint, Transaction } from "@ckb-ccc/core";
 import { logTx } from "./utils";
-import { getMyScript } from "./ccc-client";
+import { adminSigner } from "./dependencies";
 
-export async function meltCell(signer: Signer) {
-  const proof = getMyScript("proof");
-
+export async function meltCell(outPoint: OutPoint) {
   const tx = Transaction.from({
     version: 0,
     cellDeps: [],
     headerDeps: [],
     inputs: [
       {
-        previousOutput: proof.cellDeps[0]!.cellDep.outPoint,
+        previousOutput: outPoint,
         since: "0x0",
       },
     ],
@@ -20,7 +18,7 @@ export async function meltCell(signer: Signer) {
     witnesses: [],
   });
 
-  await tx.completeFeeBy(signer);
+  await tx.completeFeeBy(adminSigner);
   logTx(tx);
 
   return tx;

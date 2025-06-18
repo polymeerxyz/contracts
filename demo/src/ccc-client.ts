@@ -34,7 +34,11 @@ export function buildCccClient(network: Network) {
   return client;
 }
 
-type MyScript = "distribution" | "proof" | "vault";
+type MyScript =
+  | "distribution-lock"
+  | "distribution-type"
+  | "proof-type"
+  | "vault-type";
 
 export function getMyScript(name: MyScript): ScriptInfo {
   const script = offCKB.myScripts[name];

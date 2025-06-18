@@ -1,15 +1,16 @@
-import { Script, Signer, Transaction } from "@ckb-ccc/core";
+import { Transaction } from "@ckb-ccc/core";
 import { ProofData } from "./type";
 import { logTx, generateTypeId, hashStringToByte32 } from "./utils";
 import { getMyScript } from "./ccc-client";
+import { subscriberSigner } from "./dependencies";
+import { data } from "./info";
 
-export async function submitProof(
-  signer: Signer,
-  lockScript: Script
-): Promise<Transaction> {
-  const entityId = hashStringToByte32("5ed61d69-cf14-49af-aead-5f9552cf4e81");
-  const campaignId = hashStringToByte32("2bdec373-e4bd-4d65-9963-0ebc0c4b967d");
-  const proof = hashStringToByte32("0b07a03b-5c8f-4c06-ad66-96e715bc51be");
+export async function createProof(): Promise<Transaction> {
+  const lockScript = (await subscriberSigner.getRecommendedAddressObj()).script;
+
+  const entityId = hashStringToByte32(data.entityId);
+  const campaignId = hashStringToByte32(data.campaignId);
+  const proof = hashStringToByte32(data.proof);
 
   const proofData = ProofData.encode({
     entity_id: entityId,
@@ -18,7 +19,7 @@ export async function submitProof(
     subscriber_lock_hash: lockScript.hash(),
   });
 
-  const proofContract = getMyScript("proof");
+  const proofContract = getMyScript("proof-type");
 
   const tx = Transaction.from({
     version: "0x0",
@@ -49,7 +50,7 @@ export async function submitProof(
     witnesses: ["0x"],
   });
 
-  await tx.completeFeeBy(signer);
+  await tx.completeFeeBy(subscriberSigner);
 
   const cellInput = tx.inputs[0];
   if (!cellInput) {
