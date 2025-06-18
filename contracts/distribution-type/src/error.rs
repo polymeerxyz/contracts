@@ -11,24 +11,33 @@ pub enum Error {
 #[derive(Debug)]
 #[repr(i8)]
 pub enum BizError {
-    AdminRefundAmountInvalid = 20,
-    AdminRefundCellMissing,
-    CampaignIdMismatch,
+    // General
+    DistributionTransactionInvalid = 20,
+    WitnessDataInvalid,
+
+    // Creation
+    ShardCreationDataInvalid,
+    ShardCreationDataInconsistent,
+
+    // Claim
     ClaimTransactionInvalid,
-    DistributionDataInvalid,
-    DistributionTransactionInvalid,
-    FinalClaimInvalid,
+    FinalClaimCapacityInvalid,
     ProofCellCountInvalid,
     ProofDataInvalid,
+    ProofCampaignIdMismatch,
+    ProofSubscriberLockHashMismatch,
     ProofLockHashMismatch,
     ProofOutPointMismatch,
-    RewardAmountInvalid,
-    RewardCellMissing,
-    ShardCapacityInvalid,
+    RewardCapacityInvalid,
+    RewardLockHashMismatch,
+    ShardCapacityUpdateInvalid,
     ShardDataUpdateImmutable,
-    SubscriberLockHashMismatch,
-    TypeScriptUpdateForbidden,
-    WitnessDataInvalid,
+    ShardTypeScriptImmutable,
+
+    // Reclamation
+    ReclamationSinceInvalid,
+    ReclamationLockHashMismatch,
+    ReclamationCapacityMismatch,
 }
 
 impl From<SysError> for Error {

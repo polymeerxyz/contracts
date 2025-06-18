@@ -21,7 +21,7 @@ pub fn load_context() -> Result<VmContext, Error> {
     let vault_input = load_cell(0, Source::GroupInput)?;
     let vault_data_bytes = load_cell_data(0, Source::GroupInput)?;
     let vault_data =
-        VaultCellData::from_slice(&vault_data_bytes).map_err(|_| BizError::DataStructureInvalid)?;
+        VaultCellData::from_slice(&vault_data_bytes).map_err(|_| BizError::VaultDataInvalid)?;
 
     let admin_lock_hash = load_cell_lock_hash(0, Source::GroupInput)?;
 

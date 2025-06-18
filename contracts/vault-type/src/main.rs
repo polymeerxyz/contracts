@@ -42,14 +42,17 @@ fn entry() -> Result<(), Error> {
     debug!("vault type contract is executing");
 
     let inputs_count = QueryIter::new(load_cell, Source::GroupInput).count();
-    let outputs_count = QueryIter::new(load_cell, Source::Output).count();
+    let outputs_count = QueryIter::new(load_cell, Source::GroupOutput).count();
+
+    debug!(
+        "inputs count :{}, outputs count: {}",
+        inputs_count, outputs_count
+    );
 
     match (inputs_count, outputs_count) {
         (0, 1) => verify_creation(),
-        (1, _) => {
-            // full refund or distribute
+        (1, 0) => {
             let context = load_context()?;
-            let scrip_hash = context.script.calc_script_hash();
 
             // Determine the action being performed by inspecting the outputs.
             // The code hash of the Distribution contract must be passed in this Type Script's args.
@@ -60,34 +63,21 @@ fn entry() -> Result<(), Error> {
 
             let mut dist_lock_code_hash = [0u8; 32];
             dist_lock_code_hash.copy_from_slice(&args.raw_data()[0..32]);
-            let mut dist_type_code_hash = [0u8; 32];
-            dist_type_code_hash.copy_from_slice(&args.raw_data()[32..64]);
 
-            let mut is_distribution_action = false;
-            let mut is_partial_refund_action = false;
-
-            for i in 0..outputs_count {
-                let cell = load_cell(i, Source::Output)?;
-                if let Some(type_script) = cell.type_().to_opt() {
-                    if type_script.calc_script_hash() == scrip_hash {
-                        is_partial_refund_action = true;
-                        break;
-                    }
-                }
-
-                if cell.lock().code_hash().as_slice() == dist_lock_code_hash.as_ref() {
-                    is_distribution_action = true;
-                    break;
-                }
-            }
+            let is_distribution_action = QueryIter::new(load_cell, Source::Output)
+                .any(|cell| cell.lock().code_hash().as_slice() == dist_lock_code_hash.as_ref());
 
             if is_distribution_action {
+                let mut dist_type_code_hash = [0u8; 32];
+                dist_type_code_hash.copy_from_slice(&args.raw_data()[32..64]);
                 verify_distribution(&context, &dist_lock_code_hash, &dist_type_code_hash)
-            } else if is_partial_refund_action {
-                verify_partial_refund(&context)
             } else {
                 verify_full_refund(&context)
             }
+        }
+        (1, 1) => {
+            let context = load_context()?;
+            verify_partial_refund(&context)
         }
         _ => Err(BizError::VaultTransactionInvalid)?,
     }
@@ -102,8 +92,8 @@ fn verify_creation() -> Result<(), Error> {
     let vault_data =
         VaultCellData::from_slice(&vault_data_bytes).map_err(|_| BizError::VaultDataInvalid)?;
 
-    let fee_percent: u16 = vault_data.fee_percentage().unpack();
-    if fee_percent > 10000 {
+    let fee_percentage_unpacked: u16 = vault_data.fee_percentage().unpack();
+    if fee_percentage_unpacked > 10000 {
         Err(BizError::FeePercentageOutOfRange)?;
     }
 
@@ -136,6 +126,7 @@ fn verify_distribution(
     let expected_fee_capacity = (total_capacity as u128 * fee_percent / 10000) as u64;
 
     if total_capacity < expected_fee_capacity {
+        debug!("1");
         Err(BizError::VaultTransactionInvalid)?;
     }
 
@@ -145,6 +136,7 @@ fn verify_distribution(
 
     let output_count = QueryIter::new(load_cell, Source::Output).count();
     if output_count < 2 {
+        debug!("2");
         Err(BizError::VaultTransactionInvalid)?;
     }
 
@@ -179,23 +171,24 @@ fn verify_distribution(
                 Err(BizError::DistributionDataInvalid)?;
             }
 
-            let current_shard_reward: u64 = shard_data.uniform_reward_amount().unpack();
-            if current_shard_reward == 0 {
+            let uniform_reward_amount_unpacked: u64 = shard_data.uniform_reward_amount().unpack();
+            if uniform_reward_amount_unpacked == 0 {
                 Err(BizError::ShardRewardInconsistent)?;
             }
 
             if let Some(first_amount) = uniform_reward_amount {
-                if first_amount != current_shard_reward {
+                if first_amount != uniform_reward_amount_unpacked {
                     Err(BizError::ShardRewardInconsistent)?;
                 }
             } else {
-                uniform_reward_amount = Some(current_shard_reward);
+                uniform_reward_amount = Some(uniform_reward_amount_unpacked);
             }
         } else {
             // fee cell
             let output_lock_hash = load_cell_lock_hash(i, Source::Output)?;
             if output_lock_hash == context.admin_lock_hash {
                 if total_fee_capacity > 0 {
+                    debug!("3");
                     Err(BizError::VaultTransactionInvalid)?;
                 }
                 total_fee_capacity += output_capacity;
@@ -217,53 +210,38 @@ fn verify_distribution(
 }
 
 fn verify_partial_refund(context: &VmContext) -> Result<(), Error> {
-    let output_count = QueryIter::new(load_cell, Source::Output).count();
-    if output_count != 2 {
-        Err(BizError::VaultTransactionInvalid)?;
+    let output_vault_cell = load_cell(0, Source::GroupOutput)?;
+    let output_vault_data_bytes = load_cell_data(0, Source::GroupOutput)?;
+
+    if context.vault_data.as_slice() != output_vault_data_bytes {
+        Err(BizError::VaultDataImmutable)?;
     }
 
-    let mut new_vault_cell_found = false;
-    let mut refund_cell_found = false;
-    let mut total_output_capacity: u64 = 0;
-
-    let script_hash = context.script.calc_script_hash();
-    let creator_lock_hash: [u8; 32] = context.vault_data.creator_lock_hash().into();
-    let input_data = load_cell_data(0, Source::GroupInput)?;
-
-    for i in 0..2 {
-        let output_cell = load_cell(i, Source::Output)?;
-        let output_capacity: u64 = output_cell.capacity().unpack();
-        total_output_capacity += output_capacity;
-
-        let output_lock_hash = load_cell_lock_hash(i, Source::Output)?;
-        let output_type_hash = output_cell.type_().to_opt().map(|s| s.calc_script_hash());
-
-        let is_new_vault_cell = output_type_hash == Some(script_hash.clone());
-        let is_refund_cell = output_lock_hash == creator_lock_hash;
-
-        if is_new_vault_cell {
-            if new_vault_cell_found {
-                Err(BizError::PartialRefundInvalid)?; // Found a second vault cell
-            }
-            if load_cell_data(i, Source::Output)? != input_data {
-                Err(BizError::VaultDataImmutable)?; // Vault data must not change
-            }
-            new_vault_cell_found = true;
-        } else if is_refund_cell {
-            if refund_cell_found {
-                Err(BizError::PartialRefundInvalid)?; // Found a second refund cell
-            }
-            refund_cell_found = true;
-        } else {
-            Err(BizError::PartialRefundInvalid)?; // Unknown output cell
-        }
-    }
-
-    if !new_vault_cell_found || !refund_cell_found {
+    let vault_capaciy_unpacked: u64 = output_vault_cell.capacity().unpack();
+    if vault_capaciy_unpacked >= context.vault_capacity {
         Err(BizError::PartialRefundInvalid)?;
     }
 
-    if total_output_capacity != context.vault_capacity {
+    let expected_refund_capacity = context.vault_capacity - vault_capaciy_unpacked;
+
+    let creator_lock_hash: [u8; 32] = context.vault_data.creator_lock_hash().into();
+
+    let refund_cells_found = QueryIter::new(load_cell, Source::Output)
+        .filter(|cell| cell.lock().calc_script_hash().as_slice() == creator_lock_hash.as_ref())
+        .collect::<alloc::vec::Vec<_>>();
+
+    if refund_cells_found.len() != 1 {
+        Err(BizError::PartialRefundInvalid)?;
+    }
+
+    let refund_cell = &refund_cells_found[0];
+    let refund_capacity: u64 = refund_cell.capacity().unpack();
+
+    if refund_capacity != expected_refund_capacity {
+        Err(BizError::DistributionCapacityMismatch)?;
+    }
+
+    if refund_cell.type_().to_opt().is_some() {
         Err(BizError::PartialRefundInvalid)?;
     }
 
@@ -271,13 +249,25 @@ fn verify_partial_refund(context: &VmContext) -> Result<(), Error> {
 }
 
 fn verify_full_refund(context: &VmContext) -> Result<(), Error> {
-    if QueryIter::new(load_cell, Source::Output).count() != 1 {
-        Err(BizError::VaultTransactionInvalid)?;
+    let creator_lock_hash: [u8; 32] = context.vault_data.creator_lock_hash().into();
+
+    let refund_cells_found = QueryIter::new(load_cell, Source::Output)
+        .filter(|cell| cell.lock().calc_script_hash().as_slice() == creator_lock_hash.as_ref())
+        .collect::<alloc::vec::Vec<_>>();
+
+    if refund_cells_found.len() != 1 {
+        Err(BizError::RefundLockHashMismatch)?;
     }
 
-    let output_lock_hash = load_cell_lock_hash(0, Source::Output)?;
-    if output_lock_hash != context.vault_data.creator_lock_hash().as_slice() {
-        Err(BizError::RefundLockHashMismatch)?;
+    let refund_cell = &refund_cells_found[0];
+    let refund_capacity: u64 = refund_cell.capacity().unpack();
+
+    if refund_capacity != context.vault_capacity {
+        Err(BizError::DistributionCapacityMismatch)?;
+    }
+
+    if refund_cell.type_().to_opt().is_some() {
+        Err(BizError::VaultTransactionInvalid)?;
     }
 
     Ok(())

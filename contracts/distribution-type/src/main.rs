@@ -20,15 +20,20 @@ use ckb_std::{
     ckb_types::prelude::*,
     debug,
     high_level::{
-        load_cell, load_cell_data, load_cell_lock_hash, load_input_out_point, load_script,
-        load_witness_args, QueryIter,
+        load_cell, load_cell_data, load_cell_lock_hash, load_input_out_point, load_input_since,
+        load_script, load_witness_args, QueryIter,
     },
 };
-use common::schema::{
-    distribution::{ClaimWitness, DistributionCellData},
-    proof::ProofCellData,
+use common::{
+    schema::{
+        distribution::{ClaimWitness, DistributionCellData},
+        proof::ProofCellData,
+    },
+    NULL_HASH,
 };
 use distribution_type::error::{BizError, Error};
+
+const SINCE_TIMESTAMP_FLAG: u64 = 0x4000_0000_0000_0000;
 
 pub fn program_entry() -> i8 {
     match entry() {
@@ -40,19 +45,26 @@ pub fn program_entry() -> i8 {
 fn entry() -> Result<(), Error> {
     debug!("distribution type contract is executing");
 
-    let group_inputs_count = QueryIter::new(load_cell, Source::GroupInput).count();
-    if group_inputs_count != 1 {
-        // This script doesn't handle creation, only updates/consumption.
-        // We could add creation logic, but for now, we'll assume it's created correctly.
-        Err(BizError::ClaimTransactionInvalid)?
-    }
+    let inputs_count = QueryIter::new(load_cell, Source::GroupInput).count();
+    let outputs_count = QueryIter::new(load_cell, Source::GroupOutput).count();
 
-    let dist_data_bytes = load_cell_data(0, Source::GroupInput)?;
-    let dist_data = DistributionCellData::from_slice(&dist_data_bytes)
-        .map_err(|_| BizError::DistributionDataInvalid)?;
+    match (inputs_count, outputs_count) {
+        (0, count) if count > 0 => {
+            // Case 1: Creation. 0 inputs with this type, N > 0 outputs.
+            verify_creation(count)
+        }
+        (1, 1) => {
+            // Case 2: Update. 1 input, 1 output. This must be a normal claim.
+            let since = load_input_since(0, Source::GroupInput)?;
+            if since != 0 {
+                Err(BizError::ClaimTransactionInvalid)?;
+            }
 
-    match load_witness_args(0, Source::GroupInput) {
-        Ok(witness_args) => {
+            let dist_data_bytes = load_cell_data(0, Source::GroupInput)?;
+            let dist_data = DistributionCellData::from_slice(&dist_data_bytes)
+                .map_err(|_| BizError::ShardCreationDataInvalid)?;
+
+            let witness_args = load_witness_args(0, Source::GroupInput)?;
             let witness_args_bytes = witness_args
                 .lock()
                 .to_opt()
@@ -62,17 +74,93 @@ fn entry() -> Result<(), Error> {
             let claim_witness = ClaimWitness::from_slice(&witness_args_bytes)
                 .map_err(|_| BizError::WitnessDataInvalid)?;
 
-            let proof_capacity = verify_and_get_proof_cell(&dist_data, &claim_witness)?;
-            verify_claim_outputs(&dist_data, &claim_witness, proof_capacity)?;
+            verify_claim_update(&dist_data, &claim_witness)
         }
-        Err(_) => {
-            verify_reclamation_outputs(&dist_data)?;
+        (1, 0) => {
+            // Case 3: Destruction. 1 input, 0 outputs. Final claim or reclamation.
+            let since = load_input_since(0, Source::GroupInput)?;
+
+            let dist_data_bytes = load_cell_data(0, Source::GroupInput)?;
+            let dist_data = DistributionCellData::from_slice(&dist_data_bytes)
+                .map_err(|_| BizError::ShardCreationDataInvalid)?;
+
+            verify_destruction(&dist_data, since)
+        }
+        _ => Err(BizError::DistributionTransactionInvalid)?,
+    }
+}
+
+fn verify_creation(outputs_count: usize) -> Result<(), Error> {
+    let first_shard_data_bytes = load_cell_data(0, Source::GroupOutput)?;
+    let first_shard_data = DistributionCellData::from_slice(&first_shard_data_bytes)
+        .map_err(|_| BizError::ShardCreationDataInvalid)?;
+
+    let campaign_id = first_shard_data.campaign_id();
+    if campaign_id.as_slice() == NULL_HASH {
+        Err(BizError::ShardCreationDataInvalid)?;
+    }
+
+    let proof_script_code_hash = first_shard_data.proof_script_code_hash();
+    if proof_script_code_hash.as_slice() == NULL_HASH {
+        Err(BizError::ShardCreationDataInvalid)?;
+    }
+
+    let admin_lock_hash = first_shard_data.admin_lock_hash();
+    if admin_lock_hash.as_slice() == NULL_HASH {
+        Err(BizError::ShardCreationDataInvalid)?;
+    }
+
+    let uniform_reward_amount = first_shard_data.uniform_reward_amount();
+    let uniform_reward_amount_unpacked: u64 = uniform_reward_amount.unpack();
+    if uniform_reward_amount_unpacked == 0 {
+        Err(BizError::ShardCreationDataInvalid)?;
+    }
+
+    let deadline = first_shard_data.deadline();
+    let deadline_unpacked: u64 = deadline.unpack();
+    if deadline_unpacked == 0 {
+        Err(BizError::ShardCreationDataInvalid)?;
+    }
+
+    if first_shard_data.merkle_root().as_slice() == NULL_HASH {
+        Err(BizError::ShardCreationDataInvalid)?;
+    }
+
+    if outputs_count > 1 {
+        for i in 1..outputs_count {
+            let current_shard_data_bytes = load_cell_data(i, Source::GroupOutput)?;
+            let current_shard_data = DistributionCellData::from_slice(&current_shard_data_bytes)
+                .map_err(|_| BizError::ShardCreationDataInvalid)?;
+
+            if current_shard_data.campaign_id().as_bytes() != campaign_id.as_bytes() {
+                Err(BizError::ShardCreationDataInconsistent)?;
+            }
+            if current_shard_data.proof_script_code_hash().as_bytes()
+                != proof_script_code_hash.as_bytes()
+            {
+                Err(BizError::ShardCreationDataInconsistent)?;
+            }
+            if current_shard_data.admin_lock_hash().as_bytes() != admin_lock_hash.as_bytes() {
+                Err(BizError::ShardCreationDataInconsistent)?;
+            }
+            if current_shard_data.uniform_reward_amount().as_bytes()
+                != uniform_reward_amount.as_bytes()
+            {
+                Err(BizError::ShardCreationDataInconsistent)?;
+            }
+            if current_shard_data.deadline().as_bytes() != deadline.as_bytes() {
+                Err(BizError::ShardCreationDataInconsistent)?;
+            }
+            if current_shard_data.merkle_root().as_slice() == NULL_HASH {
+                Err(BizError::ShardCreationDataInconsistent)?;
+            }
         }
     }
+
     Ok(())
 }
 
-fn verify_and_get_proof_cell(
+fn verify_and_get_proof_cell_capacity(
     dist_data: &DistributionCellData,
     claim_witness: &ClaimWitness,
 ) -> Result<u64, Error> {
@@ -103,17 +191,17 @@ fn verify_and_get_proof_cell(
     }
 
     let proof_cell_data_bytes = load_cell_data(index, Source::Input)?;
-    let proof_data =
-        ProofCellData::from_slice(&proof_cell_data_bytes).map_err(|_| BizError::ProofDataInvalid)?;
+    let proof_data = ProofCellData::from_slice(&proof_cell_data_bytes)
+        .map_err(|_| BizError::ProofDataInvalid)?;
 
     if proof_data.campaign_id().as_bytes() != dist_data.campaign_id().as_bytes() {
-        Err(BizError::CampaignIdMismatch)?;
+        Err(BizError::ProofCampaignIdMismatch)?;
     }
 
     if proof_data.subscriber_lock_hash().as_bytes()
         != claim_witness.subscriber_lock_hash().as_bytes()
     {
-        Err(BizError::SubscriberLockHashMismatch)?;
+        Err(BizError::ProofSubscriberLockHashMismatch)?;
     }
 
     if proof_lock_hash.as_bytes() != claim_witness.subscriber_lock_hash().as_bytes() {
@@ -123,98 +211,122 @@ fn verify_and_get_proof_cell(
     Ok(proof_capacity)
 }
 
-fn verify_claim_outputs(
+fn verify_claim_update(
     dist_data: &DistributionCellData,
     claim_witness: &ClaimWitness,
-    proof_capacity: u64,
 ) -> Result<(), Error> {
+    let proof_cell_capacity = verify_and_get_proof_cell_capacity(dist_data, claim_witness)?;
+
     let input_dist_cell = load_cell(0, Source::GroupInput)?;
     let input_capacity: u64 = input_dist_cell.capacity().unpack();
-    let reward_amount = dist_data.uniform_reward_amount().unpack();
-    let expected_reward_capacity = reward_amount + proof_capacity;
+    let reward_amount_unpacked = dist_data.uniform_reward_amount().unpack();
+    let expected_reward_capacity = reward_amount_unpacked + proof_cell_capacity;
 
-    let is_final_claim = input_capacity == reward_amount;
-    let expected_output_count = if is_final_claim { 1 } else { 2 };
-
-    if QueryIter::new(load_cell, Source::Output).count() != expected_output_count {
+    if QueryIter::new(load_cell, Source::Output).count() != 2 {
         Err(BizError::ClaimTransactionInvalid)?;
     }
-    let expected_reward_lock_hash = claim_witness.subscriber_lock_hash();
+
+    let expected_reward_lock_hash: [u8; 32] = claim_witness.subscriber_lock_hash().into();
+    let script_hash = load_script()?.calc_script_hash();
 
     let mut reward_cell_found = false;
-    let mut new_dist_cell_found = false;
+    let mut new_shard_cell_found = false;
 
-    for i in 0..expected_output_count {
-        let output_lock_hash = load_cell_lock_hash(i, Source::Output)?;
+    for i in 0..2 {
+        let output_cell = load_cell(i, Source::Output)?;
+        let output_capacity: u64 = output_cell.capacity().unpack();
 
-        if output_lock_hash == expected_reward_lock_hash.as_slice() {
+        if load_cell_lock_hash(i, Source::Output)? == expected_reward_lock_hash {
             if reward_cell_found {
                 Err(BizError::ClaimTransactionInvalid)?;
             }
-
-            let reward_cell = load_cell(i, Source::Output)?;
-            let reward_capacity: u64 = reward_cell.capacity().unpack();
-            if reward_capacity != expected_reward_capacity {
-                Err(BizError::RewardAmountInvalid)?;
+            if output_capacity != expected_reward_capacity {
+                Err(BizError::RewardCapacityInvalid)?;
             }
             reward_cell_found = true;
-        } else {
-            if is_final_claim {
-                Err(BizError::FinalClaimInvalid)?;
+        } else if let Some(type_script) = output_cell.type_().to_opt() {
+            if type_script.calc_script_hash() == script_hash {
+                if new_shard_cell_found {
+                    Err(BizError::ClaimTransactionInvalid)?;
+                }
+                if output_cell.lock() != input_dist_cell.lock() {
+                    Err(BizError::ShardTypeScriptImmutable)?;
+                }
+                if load_cell_data(i, Source::Output)? != load_cell_data(0, Source::GroupInput)? {
+                    Err(BizError::ShardDataUpdateImmutable)?;
+                }
+                if output_capacity != input_capacity - reward_amount_unpacked {
+                    Err(BizError::ShardCapacityUpdateInvalid)?;
+                }
+                new_shard_cell_found = true;
             }
-
-            if new_dist_cell_found {
-                Err(BizError::ClaimTransactionInvalid)?;
-            }
-
-            let script_hash = load_script()?.calc_script_hash();
-            let output_cell = load_cell(i, Source::Output)?;
-            let output_type_hash = output_cell.type_().to_opt().map(|s| s.calc_script_hash());
-            if output_type_hash != Some(script_hash) {
-                Err(BizError::TypeScriptUpdateForbidden)?;
-            }
-
-            if output_cell.lock().as_bytes() != input_dist_cell.lock().as_bytes() {
-                Err(BizError::ClaimTransactionInvalid)?;
-            }
-
-            if load_cell_data(i, Source::Output)? != load_cell_data(0, Source::GroupInput)? {
-                Err(BizError::ShardDataUpdateImmutable)?;
-            }
-
-            let output_capacity: u64 = output_cell.capacity().unpack();
-            if output_capacity != input_capacity - reward_amount {
-                Err(BizError::ShardCapacityInvalid)?;
-            }
-            new_dist_cell_found = true;
         }
     }
 
-    if !reward_cell_found {
-        Err(BizError::RewardCellMissing)?;
-    }
-
-    if !is_final_claim && !new_dist_cell_found {
+    if !reward_cell_found || !new_shard_cell_found {
         Err(BizError::ClaimTransactionInvalid)?;
     }
 
     Ok(())
 }
 
-fn verify_reclamation_outputs(dist_data: &DistributionCellData) -> Result<(), Error> {
-    if QueryIter::new(load_cell, Source::Output).count() != 1 {
-        Err(BizError::DistributionTransactionInvalid)?;
-    }
+fn verify_destruction(dist_data: &DistributionCellData, since: u64) -> Result<(), Error> {
+    match load_witness_args(0, Source::GroupInput) {
+        Ok(witness_args) => {
+            // Final Claim
+            if since != 0 {
+                Err(BizError::ClaimTransactionInvalid)?;
+            }
+            if QueryIter::new(load_cell, Source::Output).count() != 1 {
+                Err(BizError::ClaimTransactionInvalid)?;
+            }
 
-    let output_lock_hash = load_cell_lock_hash(0, Source::Output)?;
-    if output_lock_hash != dist_data.admin_lock_hash().as_slice() {
-        Err(BizError::AdminRefundCellMissing)?;
-    }
+            let witness_args_bytes = witness_args
+                .lock()
+                .to_opt()
+                .ok_or(BizError::WitnessDataInvalid)?
+                .raw_data();
+            let claim_witness = ClaimWitness::from_slice(&witness_args_bytes)
+                .map_err(|_| BizError::WitnessDataInvalid)?;
 
-    let input_capacity: u64 = load_cell(0, Source::GroupInput)?.capacity().unpack();
-    let output_capacity: u64 = load_cell(0, Source::Output)?.capacity().unpack();
-    if input_capacity != output_capacity {
-        Err(BizError::AdminRefundAmountInvalid)?;
+            let proof_cell_capacity =
+                verify_and_get_proof_cell_capacity(dist_data, &claim_witness)?;
+            let input_capacity: u64 = load_cell(0, Source::GroupInput)?.capacity().unpack();
+            let reward_amount_unpacked: u64 = dist_data.uniform_reward_amount().unpack();
+            if input_capacity != reward_amount_unpacked {
+                Err(BizError::FinalClaimCapacityInvalid)?;
+            }
+
+            let expected_reward_capacity = reward_amount_unpacked + proof_cell_capacity;
+            let output_capacity: u64 = load_cell(0, Source::Output)?.capacity().unpack();
+            if output_capacity != expected_reward_capacity {
+                Err(BizError::RewardCapacityInvalid)?;
+            }
+
+            let output_lock_hash = load_cell_lock_hash(0, Source::Output)?;
+            if output_lock_hash != claim_witness.subscriber_lock_hash().as_slice() {
+                Err(BizError::RewardLockHashMismatch)?;
+            }
+        }
+        Err(_) => {
+            // Reclamation
+            let deadline_unpacked: u64 = dist_data.deadline().unpack();
+            if since != (SINCE_TIMESTAMP_FLAG | deadline_unpacked) {
+                Err(BizError::ReclamationSinceInvalid)?;
+            }
+            if QueryIter::new(load_cell, Source::Output).count() != 1 {
+                Err(BizError::DistributionTransactionInvalid)?;
+            }
+            let output_lock_hash = load_cell_lock_hash(0, Source::Output)?;
+            if output_lock_hash != dist_data.admin_lock_hash().as_slice() {
+                Err(BizError::ReclamationLockHashMismatch)?;
+            }
+            let input_capacity: u64 = load_cell(0, Source::GroupInput)?.capacity().unpack();
+            let output_capacity: u64 = load_cell(0, Source::Output)?.capacity().unpack();
+            if input_capacity != output_capacity {
+                Err(BizError::ReclamationCapacityMismatch)?;
+            }
+        }
     }
 
     Ok(())

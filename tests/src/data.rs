@@ -41,6 +41,7 @@ pub fn populate_distribution_data(
     proof_script_code_hash: &Byte32,
     merkle_root: &[u8; 32],
     reward_amount: u64,
+    deadline: u64,
 ) -> DistributionCellData {
     DistributionCellData::new_builder()
         .campaign_id(campaign_id.clone())
@@ -48,6 +49,7 @@ pub fn populate_distribution_data(
         .proof_script_code_hash(proof_script_code_hash.clone())
         .merkle_root(Byte32::from_slice(merkle_root).unwrap())
         .uniform_reward_amount(reward_amount.pack())
+        .deadline(deadline.pack())
         .build()
 }
 

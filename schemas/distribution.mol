@@ -17,7 +17,8 @@ struct DistributionCellData {
     // Stored in Shannons (1 CKB = 100,000,000 Shannons).
     uniform_reward_amount:  Uint64,
 
-    // The deadline time for claiming the reward.
+    // The timestamp (in milliseconds) after which claims are no longer valid
+    // and the remaining funds can be reclaimed by the admin.
     deadline:               Uint64,
 }
 

@@ -11,18 +11,24 @@ pub enum Error {
 #[derive(Debug)]
 #[repr(i8)]
 pub enum BizError {
+    // General
     ArgumentLengthInvalid = 20,
-    DataStructureInvalid,
-    DistributionCapacityMismatch,
-    DistributionDataInvalid,
-    FeeCapacityMismatch,
-    FeePercentageOutOfRange,
-    PartialRefundInvalid,
-    RefundLockHashMismatch,
-    ShardRewardInconsistent,
-    VaultActionUnknown,
     VaultDataInvalid,
     VaultTransactionInvalid,
+    VaultActionUnknown,
+
+    // Creation
+    FeePercentageOutOfRange,
+
+    // Distribution
+    DistributionCapacityMismatch,
+    DistributionDataInvalid,
+    ShardRewardInconsistent,
+    FeeCapacityMismatch,
+
+    // Refund
+    PartialRefundInvalid,
+    RefundLockHashMismatch,
     VaultDataImmutable,
 }
 

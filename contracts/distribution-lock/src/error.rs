@@ -11,11 +11,12 @@ pub enum Error {
 #[derive(Debug)]
 #[repr(i8)]
 pub enum BizError {
-    ClaimTimeInvalid = 20,
+    // General
+    WitnessDataInvalid = 20,
+
+    // Claim
     DistributionDataInvalid,
     MerkleProofInvalid,
-    ReclaimTimeInvalid,
-    WitnessDataInvalid,
 }
 
 impl From<SysError> for Error {

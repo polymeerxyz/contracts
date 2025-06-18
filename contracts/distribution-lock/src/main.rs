@@ -20,7 +20,7 @@ use ckb_std::{
     ckb_constants::Source,
     ckb_types::prelude::*,
     debug,
-    high_level::{load_cell_data, load_header, load_witness_args},
+    high_level::{load_cell_data, load_witness_args},
 };
 use common::schema::distribution::{ClaimWitness, DistributionCellData};
 use distribution_lock::error::{BizError, Error};
@@ -35,19 +35,12 @@ pub fn program_entry() -> i8 {
 fn entry() -> Result<(), Error> {
     debug!("distribution lock contract is executing");
 
-    let dist_data_bytes = load_cell_data(0, Source::GroupInput)?;
-    let dist_data = DistributionCellData::from_slice(&dist_data_bytes)
-        .map_err(|_| BizError::DistributionDataInvalid)?;
-
-    let header = load_header(0, Source::HeaderDep)?;
-    let block_timestamp: u64 = header.raw().timestamp().unpack();
-    let deadline_timestamp: u64 = dist_data.deadline().unpack();
-
     match load_witness_args(0, Source::GroupInput) {
         Ok(witness_args) => {
-            if block_timestamp >= deadline_timestamp {
-                Err(BizError::ClaimTimeInvalid)?;
-            }
+            // Witness is present: this is a CLAIM action.
+            let dist_data_bytes = load_cell_data(0, Source::GroupInput)?;
+            let dist_data = DistributionCellData::from_slice(&dist_data_bytes)
+                .map_err(|_| BizError::DistributionDataInvalid)?;
 
             let witness_args_bytes = witness_args
                 .lock()
@@ -58,17 +51,17 @@ fn entry() -> Result<(), Error> {
             let claim_witness = ClaimWitness::from_slice(&witness_args_bytes)
                 .map_err(|_| BizError::WitnessDataInvalid)?;
 
-            verify_merkle_proof(&dist_data, &claim_witness)?;
+            verify_merkle_proof(&dist_data, &claim_witness)
         }
         Err(_) => {
-            if block_timestamp < deadline_timestamp {
-                Err(BizError::ReclaimTimeInvalid)?;
-            }
-
-            verify_reclamation(&dist_data)?;
+            // No witness: this is a RECLAMATION action.
+            // The time lock is enforced by the `since` field on the input,
+            // which is validated by the CKB VM before this script runs.
+            // The `distribution-type` script will perform the final check
+            // to ensure the `since` value matches the on-chain deadline.
+            Ok(())
         }
     }
-    Ok(())
 }
 
 fn verify_merkle_proof(
@@ -102,11 +95,5 @@ fn verify_merkle_proof(
         Err(BizError::MerkleProofInvalid)?;
     }
 
-    Ok(())
-}
-
-fn verify_reclamation(_: &DistributionCellData) -> Result<(), Error> {
-    // If past the deadline, this lock script allows the spend.
-    // The Type Script will enforce WHERE the funds can go.
     Ok(())
 }

@@ -11,12 +11,15 @@ pub enum Error {
 #[derive(Debug)]
 #[repr(i8)]
 pub enum BizError {
-    ProofCellUpdateForbidden = 20,
+    // General
+    ProofTransactionInvalid = 20,
+    ProofCellUpdateForbidden,
+
+    // Creation
     ProofDataInvalid,
-    ProofCampaignIdInvalid,
     ProofEntityIdInvalid,
+    ProofCampaignIdInvalid,
     ProofHashInvalid,
-    ProofTransactionInvalid,
     SubscriberLockHashMismatch,
 }
 
