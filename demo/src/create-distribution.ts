@@ -56,7 +56,7 @@ export async function createDistribution(
     merkle_root: "0x" + Buffer.from(merkleRoot).toString("hex"),
     proof_script_code_hash: proofContract.codeHash,
     uniform_reward_amount: uniformRewardAmount,
-    deadline: BigInt(Date.now() + 3600 * 24 * 1000),
+    deadline: BigInt(Math.floor(Date.now() / 1000) + 120), // 2 minutes from now, in seconds
   });
 
   const distShardOutput = {

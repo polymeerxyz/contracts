@@ -23,6 +23,7 @@ use ckb_std::{
         load_cell, load_cell_data, load_cell_lock_hash, load_input_out_point, load_input_since,
         load_script, load_witness_args, QueryIter,
     },
+    since::Since,
 };
 use common::{
     schema::{
@@ -32,8 +33,6 @@ use common::{
     NULL_HASH,
 };
 use distribution_type::error::{BizError, Error};
-
-const SINCE_TIMESTAMP_FLAG: u64 = 0x4000_0000_0000_0000;
 
 pub fn program_entry() -> i8 {
     match entry() {
@@ -326,8 +325,18 @@ fn verify_destruction(dist_data: &DistributionCellData, since: u64) -> Result<()
         }
         Err(_) => {
             // Reclamation
-            let deadline_unpacked: u64 = dist_data.deadline().unpack();
-            if since != (SINCE_TIMESTAMP_FLAG | deadline_unpacked) {
+            let deadline: u64 = dist_data.deadline().unpack();
+
+            let since_timestamp = Since::new(since)
+                .extract_lock_value()
+                .and_then(|v| v.timestamp())
+                .ok_or(BizError::ReclamationSinceInvalid)?;
+
+            // The `since` value from the transaction must be greater than or equal to the `deadline`
+            // stored in the cell data. The CKB VM separately ensures that the on-chain median
+            // timestamp is greater than or equal to the transaction's `since` value.
+            // This combination correctly enforces that reclamation can only happen after the deadline.
+            if since_timestamp < deadline {
                 Err(BizError::ReclamationSinceInvalid)?;
             }
 

@@ -8,6 +8,7 @@ import { CKB_UNIT, getOutpoint } from "./utils";
 import { refundVault } from "./refund-vault";
 import { createDistribution } from "./create-distribution";
 import { claimDistribution } from "./claim-distribution";
+import { reclaimDistribution } from "./reclaim-distribution";
 
 (async function () {
   program
@@ -78,6 +79,17 @@ import { claimDistribution } from "./claim-distribution";
       const proofOutpoint = getOutpoint(proofOutpointStr);
       const tx = await claimDistribution(distOutpoint, proofOutpoint);
       const result = await subscriberSigner.sendTransaction(tx);
+      console.log("Transaction sent:", result);
+    });
+
+  program
+    .command("reclaim-distribution")
+    .description("Reclaim rewards from a distribution shard (as admin)")
+    .argument("<outpoint>", "distribution cell outpoint (e.g., 0x...:0)")
+    .action(async (outpointStr) => {
+      const outPoint = getOutpoint(outpointStr);
+      const tx = await reclaimDistribution(outPoint);
+      const result = await adminSigner.sendTransaction(tx);
       console.log("Transaction sent:", result);
     });
 

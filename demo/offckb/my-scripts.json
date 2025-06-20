@@ -17,13 +17,13 @@
       ]
     },
     "distribution-type": {
-      "codeHash": "0x8795ec0236068d955841ae7be04c91e2f2afdbb77a33c019efd9de637298f30b",
+      "codeHash": "0xb59bef87c6934e114adfa7e8321f5054ebf039964e56899ef0e96773b72adf04",
       "hashType": "data1",
       "cellDeps": [
         {
           "cellDep": {
             "outPoint": {
-              "txHash": "0x5db7f0be91d93e7c4a5f939f8033b33ec517b87fc8dd576c0defb61a5046e1fb",
+              "txHash": "0xce2edc5a5795a48bcffe8e5104b6413d448df24b883f2d9b43f8cd198957d1b3",
               "index": 0
             },
             "depType": "code"

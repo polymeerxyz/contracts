@@ -392,7 +392,7 @@ fn test_reclaim_distribution() {
     let campaign_id = Byte32::from_slice(&[1; 32]).unwrap();
     let merkle_root = [0u8; 32];
     let reward_amount = 100 * 100_000_000u64;
-    let deadline_ms = 1_000_000u64;
+    let deadline_s = 1_000_000u64; // Deadline in seconds.
 
     // prepare distribution shard
     let dist_capacity = reward_amount * 10;
@@ -408,7 +408,7 @@ fn test_reclaim_distribution() {
         &Byte32::from_slice(proof_code_hash.as_slice()).unwrap(),
         &merkle_root,
         reward_amount,
-        deadline_ms,
+        deadline_s,
     );
     let dist_input_out_point = context.create_cell(
         CellOutput::new_builder()
@@ -432,7 +432,10 @@ fn test_reclaim_distribution() {
         .build();
 
     // prepare input with `since`
-    let since = 0x4000_0000_0000_0000u64 | deadline_ms;
+    // The `since` value must be >= the deadline in the cell data.
+    // The on-chain median timestamp must be >= the `since` value.
+    let since_timestamp_s = deadline_s + 10; // Reclaim 10 seconds after deadline.
+    let since = 0x4000_0000_0000_0000u64 | since_timestamp_s;
     let dist_input = CellInput::new_builder()
         .previous_output(dist_input_out_point)
         .since(since.pack())
@@ -447,8 +450,10 @@ fn test_reclaim_distribution() {
     let admin_change_output = CellOutput::new_builder().lock(admin_lock_script).build();
 
     // prepare header dep for `since` and script validation
+    // The header timestamp must be in milliseconds and its value in seconds must be >= the since value.
+    let header_timestamp_ms = since_timestamp_s * 1000;
     let header = HeaderBuilder::default()
-        .timestamp(deadline_ms.pack())
+        .timestamp(header_timestamp_ms.pack())
         .build();
     context.insert_header(header.clone());
     let header_dep = header.hash();

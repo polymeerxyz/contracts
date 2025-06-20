@@ -8,6 +8,8 @@ import { data } from "./info";
 export async function createProof(): Promise<Transaction> {
   const lockScript = (await subscriberSigner.getRecommendedAddressObj()).script;
 
+  const proofContract = getMyScript("proof-type");
+
   const entityId = hashStringToByte32(data.entityId);
   const campaignId = hashStringToByte32(data.campaignId);
   const proof = hashStringToByte32(data.proof);
@@ -18,8 +20,6 @@ export async function createProof(): Promise<Transaction> {
     proof: proof,
     subscriber_lock_hash: lockScript.hash(),
   });
-
-  const proofContract = getMyScript("proof-type");
 
   const tx = Transaction.from({
     version: "0x0",
