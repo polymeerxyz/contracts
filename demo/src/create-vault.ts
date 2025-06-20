@@ -9,12 +9,12 @@ export async function createVault(amount: bigint) {
   const adminLock = (await adminSigner.getRecommendedAddressObj()).script;
   const creatorLock = (await creatorSigner.getRecommendedAddressObj()).script;
 
-  const campaignId = hashStringToByte32(data.campaignId);
-
   const proofContract = getMyScript("proof-type");
   const distLockContract = getMyScript("distribution-lock");
   const distTypeContract = getMyScript("distribution-type");
   const vaultContract = getMyScript("vault-type");
+
+  const campaignId = hashStringToByte32(data.campaignId);
 
   const feePercentage = 500; // 5.00%
 
