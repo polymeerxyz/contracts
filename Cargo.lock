@@ -212,7 +212,7 @@ dependencies = [
  "ckb-crypto",
  "ckb-dao-utils",
  "ckb-error",
- "ckb-hash 0.200.0",
+ "ckb-hash",
  "ckb-jsonrpc-types",
  "ckb-logger",
  "ckb-pow",
@@ -331,7 +331,7 @@ dependencies = [
  "cfg-if",
  "ckb-error",
  "ckb-fixed-hash",
- "ckb-hash 0.200.0",
+ "ckb-hash",
  "ckb-occupied-capacity",
  "molecule",
  "numext-fixed-uint",
@@ -345,15 +345,6 @@ checksum = "93571b17af91fc16f03275bd70612e16092ad4d2e89eaed9cdf513cd3f1e20e7"
 dependencies = [
  "blake2b-ref",
  "blake2b-rs",
-]
-
-[[package]]
-name = "ckb-hash"
-version = "0.202.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a74fb43c0f092a5ea388d31e4579cada2cc14e45dd5818b996f348613efe202"
-dependencies = [
- "blake2b-ref",
 ]
 
 [[package]]
@@ -436,7 +427,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "656ce99ec57ed75be3d87800d747c15311a99acd24f8d332ecf9aad99dcd4fd0"
 dependencies = [
  "byteorder",
- "ckb-hash 0.200.0",
+ "ckb-hash",
  "ckb-types",
  "eaglesong",
  "log",
@@ -477,7 +468,7 @@ dependencies = [
  "byteorder",
  "ckb-chain-spec",
  "ckb-error",
- "ckb-hash 0.200.0",
+ "ckb-hash",
  "ckb-logger",
  "ckb-traits",
  "ckb-types",
@@ -496,7 +487,7 @@ dependencies = [
  "buddy-alloc",
  "cc",
  "ckb-gen-types",
- "ckb-hash 0.200.0",
+ "ckb-hash",
  "ckb-x64-simulator",
  "gcd",
 ]
@@ -533,7 +524,7 @@ dependencies = [
  "ckb-chain-spec",
  "ckb-crypto",
  "ckb-error",
- "ckb-hash 0.200.0",
+ "ckb-hash",
  "ckb-jsonrpc-types",
  "ckb-mock-tx-types",
  "ckb-resource",
@@ -570,7 +561,7 @@ dependencies = [
  "ckb-error",
  "ckb-fixed-hash",
  "ckb-gen-types",
- "ckb-hash 0.200.0",
+ "ckb-hash",
  "ckb-merkle-mountain-range",
  "ckb-occupied-capacity",
  "ckb-rational",
@@ -686,7 +677,6 @@ dependencies = [
 name = "common"
 version = "0.1.0"
 dependencies = [
- "ckb-hash 0.202.0",
  "ckb-std",
  "faster-hex 0.10.0",
  "molecule",
@@ -758,7 +748,7 @@ dependencies = [
  "proc-macro2",
  "quote",
  "rustc_version",
- "syn 2.0.103",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -778,7 +768,7 @@ checksum = "cb7330aeadfbe296029522e6c40f315320aba36fc43a5b3632f3795348f3bd22"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.103",
+ "syn 2.0.104",
  "unicode-xid",
 ]
 
@@ -796,7 +786,7 @@ dependencies = [
 name = "distribution-lock"
 version = "0.1.0"
 dependencies = [
- "ckb-hash 0.202.0",
+ "ckb-hash",
  "ckb-std",
  "common",
  "molecule",
@@ -831,12 +821,12 @@ checksum = "48c757948c5ede0e46177b7add2e67155f70e33c07fea8284df6576da70b3719"
 
 [[package]]
 name = "errno"
-version = "0.3.12"
+version = "0.3.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cea14ef9355e3beab063703aa9dab15afd25f0667c341310c1e5274bb1d0da18"
+checksum = "778e2ac28f6c47af28e4907f13ffd1e1ddbd400980a9abd7c8df189bf578a5ad"
 dependencies = [
  "libc",
- "windows-sys",
+ "windows-sys 0.60.2",
 ]
 
 [[package]]
@@ -926,7 +916,7 @@ checksum = "162ee34ebcb7c64a8abebc059ce0fee27c2262618d7b60ed8faf72fef13c3650"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.103",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -1222,7 +1212,7 @@ checksum = "49e7bc1560b95a3c4a25d03de42fe76ca718ab92d1a22a55b9b4cf67b3ae635c"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.103",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -1360,7 +1350,7 @@ dependencies = [
  "pest_meta",
  "proc-macro2",
  "quote",
- "syn 2.0.103",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -1600,7 +1590,7 @@ dependencies = [
  "errno",
  "libc",
  "linux-raw-sys",
- "windows-sys",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1699,7 +1689,7 @@ checksum = "5b0276cf7f2c73365f7157c8123c21cd9a50fbbd844757af28ca1f5925fc2a00"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.103",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -1812,9 +1802,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "2.0.103"
+version = "2.0.104"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e4307e30089d6fd6aff212f2da3a1f9e32f3223b1f010fb09b7c95f90f3ca1e8"
+checksum = "17b6f705963418cdb9927482fa304bc562ece2fdd4f616084c50b7023b435a40"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1831,7 +1821,7 @@ dependencies = [
  "getrandom 0.3.3",
  "once_cell",
  "rustix",
- "windows-sys",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -1871,7 +1861,7 @@ checksum = "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.103",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -1882,7 +1872,7 @@ checksum = "7f7cf42b4507d8ea322120659672cf1b9dbb93f8f2d4ecfd6e51350ff5b17a1d"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.103",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -1905,7 +1895,7 @@ checksum = "6e06d43f1345a3bcd39f6a56dbb7dcab2ba47e68e8ac134855e7e2bdbaf8cab8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.103",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -1957,6 +1947,15 @@ name = "unicode-xid"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
+
+[[package]]
+name = "vault-lock"
+version = "0.1.0"
+dependencies = [
+ "ckb-std",
+ "common",
+ "molecule",
+]
 
 [[package]]
 name = "vault-type"
@@ -2025,7 +2024,7 @@ dependencies = [
  "log",
  "proc-macro2",
  "quote",
- "syn 2.0.103",
+ "syn 2.0.104",
  "wasm-bindgen-shared",
 ]
 
@@ -2047,7 +2046,7 @@ checksum = "8ae87ea40c9f689fc23f209965b6fb8a99ad69aeeb0231408be24920604395de"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.103",
+ "syn 2.0.104",
  "wasm-bindgen-backend",
  "wasm-bindgen-shared",
 ]
@@ -2093,7 +2092,7 @@ version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "cf221c93e13a30d793f7645a0e7762c55d169dbb0a49671918a2319d289b10bb"
 dependencies = [
- "windows-sys",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]
@@ -2156,7 +2155,7 @@ checksum = "a47fddd13af08290e67f4acabf4b459f647552718f683a7b415d290ac744a836"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.103",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -2167,7 +2166,7 @@ checksum = "bd9211b69f8dcdfa817bfd14bf1c97c9188afa36f4750130fcdf3f400eca9fa8"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.103",
+ "syn 2.0.104",
 ]
 
 [[package]]
@@ -2211,6 +2210,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "1e38bc4d79ed67fd075bcc251a1c39b32a1776bbe92e5bef1f0bf1f8c531853b"
 dependencies = [
  "windows-targets 0.52.6",
+]
+
+[[package]]
+name = "windows-sys"
+version = "0.60.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f2f500e4d28234f72040990ec9d39e3a6b950f9f22d3dba18416c35882612bcb"
+dependencies = [
+ "windows-targets 0.53.2",
 ]
 
 [[package]]
@@ -2382,5 +2390,5 @@ checksum = "9ecf5b4cc5364572d7f4c329661bcc82724222973f2cab6f050a4e5c22f75181"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.103",
+ "syn 2.0.104",
 ]

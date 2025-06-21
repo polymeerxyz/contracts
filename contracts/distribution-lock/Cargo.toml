@@ -9,7 +9,7 @@ common = { path = "../../crates/common", default-features = false, features = [
 ] }
 ckb-hash = { workspace = true, features = ["ckb-contract"] }
 ckb-std.workspace = true
-molecule = { workspace = true, features = ["bytes_vec"] }
+molecule.workspace = true
 
 [features]
 library = []

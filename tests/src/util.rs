@@ -1,5 +1,17 @@
-use ckb_testtool::ckb_hash::new_blake2b;
 use std::vec::Vec;
+
+use ckb_testtool::{ckb_hash::new_blake2b, ckb_types::packed::CellInput};
+use molecule::prelude::Entity;
+
+pub fn calculate_type_id(cell_input: &CellInput, index: usize) -> [u8; 32] {
+    let mut blake2b = new_blake2b();
+    blake2b.update(cell_input.as_slice());
+    blake2b.update(&index.to_le_bytes());
+
+    let mut type_id = [0; 32];
+    blake2b.finalize(&mut type_id);
+    type_id
+}
 
 pub fn blake2b_256<T: AsRef<[u8]>>(s: T) -> [u8; 32] {
     let mut blake2b = new_blake2b();
@@ -22,11 +34,7 @@ pub fn build_merkle_root(leaves: &[[u8; 32]]) -> [u8; 32] {
         let mut next_level = Vec::new();
         for chunk in current_level.chunks(2) {
             let node1 = chunk[0];
-            let node2 = if chunk.len() > 1 {
-                chunk[1]
-            } else {
-                node1
-            }; // Duplicate if odd
+            let node2 = if chunk.len() > 1 { chunk[1] } else { node1 }; // Duplicate if odd
 
             let mut combined = Vec::new();
             if node1 < node2 {
@@ -68,11 +76,7 @@ pub fn build_merkle_proof(leaves: &[[u8; 32]], leaf_index: usize) -> Vec<[u8; 32
         let mut next_level = Vec::new();
         for chunk in current_level.chunks(2) {
             let node1 = chunk[0];
-            let node2 = if chunk.len() > 1 {
-                chunk[1]
-            } else {
-                node1
-            };
+            let node2 = if chunk.len() > 1 { chunk[1] } else { node1 };
 
             let mut combined = Vec::new();
             if node1 < node2 {

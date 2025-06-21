@@ -4,17 +4,15 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-ckb-hash = { workspace = true, features = ["ckb-contract"] }
 ckb-std.workspace = true
 faster-hex.workspace = true
-molecule = { workspace = true, features = ["bytes_vec"] }
+molecule.workspace = true
 
 [features]
 default = []
 distribution = []
 proof = []
 vault = []
-type_id = []
 
 [build-dependencies]
 molecule-codegen.workspace = true

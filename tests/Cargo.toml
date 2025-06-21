@@ -7,7 +7,11 @@ edition = "2021"
 native-simulator = ["ckb-testtool/native-simulator"]
 
 [dependencies]
-common = { path = "../crates/common", features = ["proof", "type_id", "distribution", "vault"] }
+common = { path = "../crates/common", features = [
+  "proof",
+  "distribution",
+  "vault",
+] }
 ckb-testtool = "0.15.0"
 faster-hex.workspace = true
 molecule.workspace = true

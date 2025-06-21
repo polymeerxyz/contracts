@@ -8,9 +8,6 @@ pub mod conversion;
 pub mod error;
 pub mod utils;
 
-#[cfg(feature = "type_id")]
-pub mod type_id;
-
 mod generated;
 
 pub use generated::base;

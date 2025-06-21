@@ -8,6 +8,7 @@ members = [
   "contracts/distribution-lock",
   "contracts/distribution-type",
   "contracts/proof-type",
+  "contracts/vault-lock",
   "contracts/vault-type",
   "crates/*",
   "tests",
@@ -20,8 +21,8 @@ codegen-units = 1
 debug = true
 
 [workspace.dependencies]
-ckb-gen-types = "0.202.0"
-ckb-hash = { version = "0.202.0", default-features = false }
+ckb-gen-types = "0.200.0"
+ckb-hash = { version = "0.200.0", default-features = false }
 ckb-std = "0.17.2"
 faster-hex = { version = "0.10.0", default-features = false }
 molecule = { version = "0.8.0", default-features = false }
