@@ -1,22 +1,24 @@
 import { CellOutput, OutPoint, Transaction } from "@ckb-ccc/core";
-import { VaultData } from "./type";
 import { getMyScript } from "./ccc-client";
 import { logTx } from "./utils";
-import { adminSigner, creatorSigner } from "./dependencies";
+import { creatorSigner } from "./dependencies";
 
 export async function refundVault(vaultOutPoint: OutPoint, amount: bigint) {
   const creatorLock = (await creatorSigner.getRecommendedAddressObj()).script;
 
-  const vaultContract = getMyScript("vault-type");
+  const vaultLockContract = getMyScript("vault-lock");
+  const vaultTypeContract = getMyScript("vault-type");
 
-  const vaultCell = await adminSigner.client.getCellLive(vaultOutPoint, true);
+  const vaultCell = await creatorSigner.client.getCellLive(vaultOutPoint, true);
   if (!vaultCell) {
     throw new Error("Vault cell not found");
   }
 
-  const vaultData = VaultData.decode(vaultCell.outputData);
+  // Vault lock args are: creator_lock_hash (32 bytes) + admin_lock_hash (32 bytes)
+  const vaultLockArgs = vaultCell.cellOutput.lock.args;
+  const creatorLockHashFromVault = vaultLockArgs.slice(0, 66); // 0x + 64 hex chars
 
-  if (creatorLock.hash() !== vaultData.creator_lock_hash) {
+  if (creatorLock.hash() !== creatorLockHashFromVault) {
     throw new Error(
       "Creator lock hash mismatch. The provided creator private key does not match the one in the vault."
     );
@@ -55,8 +57,12 @@ export async function refundVault(vaultOutPoint: OutPoint, amount: bigint) {
   const tx = Transaction.from({
     cellDeps: [
       {
-        outPoint: vaultContract.cellDeps[0]!.cellDep.outPoint,
-        depType: vaultContract.cellDeps[0]!.cellDep.depType,
+        outPoint: vaultLockContract.cellDeps[0]!.cellDep.outPoint,
+        depType: vaultLockContract.cellDeps[0]!.cellDep.depType,
+      },
+      {
+        outPoint: vaultTypeContract.cellDeps[0]!.cellDep.outPoint,
+        depType: vaultTypeContract.cellDeps[0]!.cellDep.depType,
       },
     ],
     inputs: [
@@ -69,7 +75,8 @@ export async function refundVault(vaultOutPoint: OutPoint, amount: bigint) {
     outputsData,
   });
 
-  await tx.completeFeeBy(adminSigner);
+  // Sign with creator's key to authorize refund
+  await tx.completeFeeBy(creatorSigner);
   logTx(tx);
 
   return tx;

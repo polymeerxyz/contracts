@@ -14,7 +14,8 @@ export async function createDistribution(
   const subscriberLock = (await subscriberSigner.getRecommendedAddressObj())
     .script;
 
-  const vaultContract = getMyScript("vault-type");
+  const vaultLockContract = getMyScript("vault-lock");
+  const vaultTypeContract = getMyScript("vault-type");
   const distLockContract = getMyScript("distribution-lock");
   const distTypeContract = getMyScript("distribution-type");
   const proofContract = getMyScript("proof-type");
@@ -73,8 +74,12 @@ export async function createDistribution(
   const tx = Transaction.from({
     cellDeps: [
       {
-        outPoint: vaultContract.cellDeps[0]!.cellDep.outPoint,
-        depType: vaultContract.cellDeps[0]!.cellDep.depType,
+        outPoint: vaultTypeContract.cellDeps[0]!.cellDep.outPoint,
+        depType: vaultTypeContract.cellDeps[0]!.cellDep.depType,
+      },
+      {
+        outPoint: vaultLockContract.cellDeps[0]!.cellDep.outPoint,
+        depType: vaultLockContract.cellDeps[0]!.cellDep.depType,
       },
       {
         outPoint: distLockContract.cellDeps[0]!.cellDep.outPoint,

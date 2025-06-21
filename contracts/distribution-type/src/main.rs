@@ -255,7 +255,7 @@ fn verify_claim_update(
                     Err(BizError::ShardTypeScriptImmutable)?;
                 }
                 if load_cell_data(i, Source::Output)? != load_cell_data(0, Source::GroupInput)? {
-                    Err(BizError::ShardDataUpdateImmutable)?;
+                    Err(BizError::ShardDataImmutable)?;
                 }
                 if output_capacity != input_capacity - reward_amount_unpacked {
                     Err(BizError::ShardCapacityUpdateInvalid)?;

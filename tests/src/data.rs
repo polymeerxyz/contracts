@@ -23,13 +23,11 @@ pub fn populate_proof_data(subscriber_lock_hash: &Byte32, campaign_id: &Byte32) 
 
 pub fn populate_vault_data(
     campaign_id: &Byte32,
-    creator_lock_hash: &Byte32,
     proof_script_code_hash: &Byte32,
     fee_percentage: u16,
 ) -> VaultCellData {
     VaultCellData::new_builder()
         .campaign_id(campaign_id.clone())
-        .creator_lock_hash(creator_lock_hash.clone())
         .proof_script_code_hash(proof_script_code_hash.clone())
         .fee_percentage(fee_percentage.pack())
         .build()

@@ -4,10 +4,7 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-common = { path = "../../crates/common", default-features = false, features = [
-  "distribution",
-  "vault",
-] }
+common = { path = "../../crates/common", default-features = false }
 ckb-std.workspace = true
 molecule.workspace = true
 

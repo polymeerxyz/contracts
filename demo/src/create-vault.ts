@@ -12,7 +12,8 @@ export async function createVault(amount: bigint) {
   const proofContract = getMyScript("proof-type");
   const distLockContract = getMyScript("distribution-lock");
   const distTypeContract = getMyScript("distribution-type");
-  const vaultContract = getMyScript("vault-type");
+  const vaultLockContract = getMyScript("vault-lock");
+  const vaultTypeContract = getMyScript("vault-type");
 
   const campaignId = hashStringToByte32(data.campaignId);
 
@@ -20,19 +21,23 @@ export async function createVault(amount: bigint) {
 
   const vaultData = VaultData.encode({
     campaign_id: campaignId,
-    creator_lock_hash: creatorLock.hash(),
     fee_percentage: feePercentage,
     proof_script_code_hash: proofContract.codeHash,
   });
 
+  const vaultLockArgs = creatorLock.hash() + adminLock.hash().slice(2);
   const vaultTypeArgs =
     distLockContract.codeHash + distTypeContract.codeHash.slice(2);
 
   const tx = Transaction.from({
     cellDeps: [
       {
-        outPoint: vaultContract.cellDeps[0]!.cellDep.outPoint,
-        depType: vaultContract.cellDeps[0]!.cellDep.depType,
+        outPoint: vaultLockContract.cellDeps[0]!.cellDep.outPoint,
+        depType: vaultLockContract.cellDeps[0]!.cellDep.depType,
+      },
+      {
+        outPoint: vaultTypeContract.cellDeps[0]!.cellDep.outPoint,
+        depType: vaultTypeContract.cellDeps[0]!.cellDep.depType,
       },
       {
         outPoint: distLockContract.cellDeps[0]!.cellDep.outPoint,
@@ -46,9 +51,12 @@ export async function createVault(amount: bigint) {
     outputs: [
       {
         capacity: amount,
-        lock: adminLock,
+        lock: {
+          ...vaultLockContract,
+          args: vaultLockArgs,
+        },
         type: {
-          ...vaultContract,
+          ...vaultTypeContract,
           args: vaultTypeArgs,
         },
       },

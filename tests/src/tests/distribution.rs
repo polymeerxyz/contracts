@@ -23,10 +23,16 @@ use crate::{
 fn test_create_distribution() {
     // deploy contracts
     let mut context = Context::default();
-    let vault_bin = Loader::default().load_binary("vault-type");
-    let vault_out_point = context.deploy_cell(vault_bin);
-    let vault_script_dep = CellDep::new_builder()
-        .out_point(vault_out_point.clone())
+    let vault_type_bin = Loader::default().load_binary("vault-type");
+    let vault_type_out_point = context.deploy_cell(vault_type_bin);
+    let vault_type_dep = CellDep::new_builder()
+        .out_point(vault_type_out_point.clone())
+        .build();
+
+    let vault_lock_bin = Loader::default().load_binary("vault-lock");
+    let vault_lock_out_point = context.deploy_cell(vault_lock_bin);
+    let vault_lock_dep = CellDep::new_builder()
+        .out_point(vault_lock_out_point.clone())
         .build();
 
     let always_success_out_point = context.deploy_cell(ALWAYS_SUCCESS.clone());
@@ -65,6 +71,14 @@ fn test_create_distribution() {
     let creator_lock_hash =
         Byte32::from_slice(creator_lock_script.calc_script_hash().as_slice()).unwrap();
 
+    // prepare vault lock script
+    let mut vault_lock_args = vec![];
+    vault_lock_args.extend_from_slice(creator_lock_hash.as_slice());
+    vault_lock_args.extend_from_slice(admin_lock_hash.as_slice());
+    let vault_lock_script = context
+        .build_script(&vault_lock_out_point, Bytes::from(vault_lock_args))
+        .unwrap();
+
     // prepare data
     let vault_capacity = 10000 * 100_000_000u64;
     let fee_percentage = 500u16; // 5.00%
@@ -72,22 +86,21 @@ fn test_create_distribution() {
 
     let vault_data = populate_vault_data(
         &campaign_id,
-        &creator_lock_hash,
         &Byte32::from_slice(proof_code_hash.as_slice()).unwrap(),
         fee_percentage,
     );
 
-    let mut vault_args = vec![];
-    vault_args.extend_from_slice(dist_lock_code_hash.as_slice());
-    vault_args.extend_from_slice(dist_type_code_hash.as_slice());
+    let mut vault_type_args = vec![];
+    vault_type_args.extend_from_slice(dist_lock_code_hash.as_slice());
+    vault_type_args.extend_from_slice(dist_type_code_hash.as_slice());
     let vault_type_script = context
-        .build_script(&vault_out_point, Bytes::from(vault_args))
+        .build_script(&vault_type_out_point, Bytes::from(vault_type_args))
         .unwrap();
 
     let vault_input_out_point = context.create_cell(
         CellOutput::new_builder()
             .capacity(vault_capacity.pack())
-            .lock(admin_lock_script.clone())
+            .lock(vault_lock_script.clone())
             .type_(Some(vault_type_script).pack())
             .build(),
         vault_data.as_bytes(),
@@ -170,7 +183,8 @@ fn test_create_distribution() {
         .cell_dep(always_success_dep)
         .cell_dep(dist_lock_dep)
         .cell_dep(dist_type_dep)
-        .cell_dep(vault_script_dep)
+        .cell_dep(vault_type_dep)
+        .cell_dep(vault_lock_dep)
         .inputs([vault_input, admin_fee_input])
         .outputs([
             shard1_output,

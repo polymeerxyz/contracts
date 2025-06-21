@@ -72,7 +72,7 @@ fn verify_merkle_proof(
 ) -> Result<(), Error> {
     // Prevent cycle exhaustion attacks by limiting proof length.
     if witness.merkle_proof().len() > MAX_MERKLE_PROOF_SIBLINGS {
-        return Err(BizError::MerkleProofInvalid.into());
+        Err(BizError::MerkleProofInvalid)?;
     }
 
     // Create the leaf hash from the proof cell outpoint and subscriber lock hash

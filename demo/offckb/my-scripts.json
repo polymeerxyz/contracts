@@ -2,13 +2,13 @@
   "devnet": {},
   "testnet": {
     "distribution-lock": {
-      "codeHash": "0x58258059c49e6daa8c167e14ff6cf0d0b2793b9d5dfb0a6f9fc59b9ef7d5c1cf",
+      "codeHash": "0xa64c7f00c5675638af9e8aed11c2eb42eefeb29285ce3805381aa75d847c8701",
       "hashType": "data1",
       "cellDeps": [
         {
           "cellDep": {
             "outPoint": {
-              "txHash": "0x94addb1e863212c02dc387a2fa6fc75741bc8a54753d80128fd422b61f132190",
+              "txHash": "0xc40c06786e264b5ec8f21f68ce1ead8c941d55ffae19b05f62583830b324a119",
               "index": 0
             },
             "depType": "code"
@@ -17,13 +17,13 @@
       ]
     },
     "distribution-type": {
-      "codeHash": "0xb59bef87c6934e114adfa7e8321f5054ebf039964e56899ef0e96773b72adf04",
+      "codeHash": "0xe779d4f326d79cb342fa186350e5874280409e11dc58b757e8ca9b0f69adfffb",
       "hashType": "data1",
       "cellDeps": [
         {
           "cellDep": {
             "outPoint": {
-              "txHash": "0xce2edc5a5795a48bcffe8e5104b6413d448df24b883f2d9b43f8cd198957d1b3",
+              "txHash": "0x0797d9d02e911db12c13cc0a7b21e964e324264911ff1201a43d89f670ab69f5",
               "index": 0
             },
             "depType": "code"
@@ -32,13 +32,28 @@
       ]
     },
     "proof-type": {
-      "codeHash": "0xd1965092fa1ff359bc7ecbd50de88b66145e8ce7e104ccc9e219812234bfa35c",
+      "codeHash": "0x9e34597e10e8e01cda3403bb0d5c4c8f2b99a32df3ae8da88480b64cf29ac600",
       "hashType": "data1",
       "cellDeps": [
         {
           "cellDep": {
             "outPoint": {
-              "txHash": "0x495058a9084bec7a11d773fa633fcf66869b92b8bf171a98be6e8e1b132f19de",
+              "txHash": "0x3870533409f06f33f6b7c52ec450d5c961d3d80cc902de30d76d2bacac71f11e",
+              "index": 0
+            },
+            "depType": "code"
+          }
+        }
+      ]
+    },
+    "vault-lock": {
+      "codeHash": "0x8c66677122ae77bf4bdc4c45e872878285cf24c8cd0af840099ed46c5c57cff8",
+      "hashType": "data1",
+      "cellDeps": [
+        {
+          "cellDep": {
+            "outPoint": {
+              "txHash": "0x782abaf55c8d424df5a1c94c3a6420ed5514ed8058669bdc984fe19bddd4a827",
               "index": 0
             },
             "depType": "code"
@@ -47,13 +62,13 @@
       ]
     },
     "vault-type": {
-      "codeHash": "0xed420ab3059f286fb430a9f818cfd4fe361351ac0b5f93af7ba623a4aee64e64",
+      "codeHash": "0x49e5f08c1688867063072550ba878185e05d2560cb94922d43cf470caa20e822",
       "hashType": "data1",
       "cellDeps": [
         {
           "cellDep": {
             "outPoint": {
-              "txHash": "0x248883df559a114d29e85c96f838feea38f80812fa6a94908d65a923604dfab0",
+              "txHash": "0xf94da793cb1217e4092f8dc17c7ad7aa26302951a90ec73bbd40ca96d04c0b4e",
               "index": 0
             },
             "depType": "code"

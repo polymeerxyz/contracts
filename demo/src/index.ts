@@ -45,14 +45,14 @@ import { reclaimDistribution } from "./reclaim-distribution";
 
   program
     .command("refund-vault")
-    .description("Refund a vault partially or fully (as admin)")
+    .description("Refund a vault partially or fully (as creator)")
     .argument("<outpoint>", "vault cell outpoint (e.g., 0x...:0)")
     .argument("<amount>", "amount of CKB to refund")
     .action(async (outpointStr, amountStr) => {
       const outpoint = getOutpoint(outpointStr);
       const amount = BigInt(amountStr) * CKB_UNIT;
       const tx = await refundVault(outpoint, amount);
-      const result = await adminSigner.sendTransaction(tx);
+      const result = await creatorSigner.sendTransaction(tx);
       console.log("Transaction sent:", result);
     });
 
