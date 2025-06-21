@@ -49,9 +49,9 @@ The command center for creators and the rewards hub for subscribers.
 
 The immutable, decentralized backbone that guarantees the system's integrity.
 
-- **Vault Contract (Type Script):** Secures campaign funds and enforces the rules of distribution and refunds. It is controlled by the Polymeer Admin but its rules are transparent and unchangeable.
+- **Vault Contracts (Lock & Type):** A pair of contracts that secure campaign funds. The `vault-lock` ensures only the Creator or Admin can initiate actions, while the `vault-type` enforces the rules for distribution, refunds, and capacity changes.
 - **Proof Contract (Type Script):** Governs the creation and single-use nature of a subscriber's on-chain proof, ensuring it cannot be double-spent.
-- **Distribution Contract (Lock Script):** A highly-efficient contract that secures sharded reward pools and processes thousands of concurrent claims by verifying Merkle proofs.
+- **Distribution Contracts (Lock & Type):** A powerful duo that enables scalable claims. The `distribution-lock` secures sharded reward pools by verifying claimant Merkle proofs. The `distribution-type` validates the accounting of every claim, ensuring the correct reward amount is paid and the shard's state is updated correctly.
 
 ### **3. How It Works: The Flow of Value**
 
@@ -65,23 +65,24 @@ The immutable, decentralized backbone that guarantees the system's integrity.
 
 5.  **Off-Chain Verification:** The extension sends the `Proof Cell`'s on-chain location to Polymeer's backend service for inclusion in the claimant list. This step is purely for aggregation; the _validity_ of the proof is already guaranteed by the on-chain cell.
 
-6.  **Distribution Fan-Out:** The campaign ends. The Polymeer Admin uses their tooling to consume the `Vault Cell` and create multiple `Distribution Shard Cells`, each containing a reward pool and a Merkle root of verified claimants.
+6.  **Distribution Fan-Out:** The campaign ends. The Polymeer Admin uses their tooling to consume the `Vault Cell` and create multiple `Distribution Shard Cells`, each containing a reward pool and a Merkle root of verified claimants. This action is authorized by the `vault-lock` and validated by the `vault-type` contract.
 
-7.  **One-Click Claim:** The user visits the **Polymeer Portal**. It shows "You have 1 claimable reward." The portal fetches the user's Merkle proof from the backend. The user clicks "Claim," authenticates with their biometrics via JoyID, and the protocol executes the claim, sending CKB directly to their wallet.
+7.  **One-Click Claim:** The user visits the **Polymeer Portal**. It shows "You have 1 claimable reward." The portal fetches the user's Merkle proof from the backend. The user clicks "Claim," authenticates with their biometrics via JoyID, and the protocol executes the claim. The `distribution-lock` verifies their proof and the `distribution-type` validates the accounting, sending CKB directly to their wallet.
 
 ### **4. Technical Deep Dive: Why This Architecture Excels**
 
 - **Privacy by Design:** JoyID's passkey-based system and our local-first tracking mean Polymeer never has access to user emails, passwords, or personal data. All on-chain activity is pseudonymous.
-- **True Scalability:** The "fan-out" from a single `Vault Cell` to many `Distribution Shard Cells` is the key innovation. It parallelizes the claim process, solving the state contention problem that plagues other UTXO-based systems.
+- **True Scalability:** The "fan-out" from a single `Vault Cell` to many `Distribution Shard Cells` is the key innovation. It parallelizes the claim process, allowing for a high degree of concurrency and solving the state contention problem that plagues other UTXO-based systems. While the number of shards is managed to optimize on-chain state, this architecture supports a significant number of simultaneous claims.
 - **Separation of Concerns:**
   - **Authentication:** Handled by JoyID and the user's device biometrics.
-  - **Authorization & Rules:** Enforced by our immutable on-chain smart contracts.
+  - **Authorization:** Managed by our `vault-lock` and `distribution-lock` scripts, which verify signatures and proofs.
+  - **Rules & State Logic:** Enforced by our immutable `vault-type`, `proof-type`, and `distribution-type` smart contracts.
   - **Usability & Data Aggregation:** Managed by our off-chain web portal and extension.
-    This separation makes the system both highly secure and user-friendly.
+    This layered approach makes the system both highly secure and user-friendly.
 
 ### **5. Business Model & Tokenomics**
 
-The protocol's business model is simple, transparent, and encoded on-chain. The `VaultCellData` contains a `fee_percentage` field. During the "Fan-Out," the `Vault` contract enforces that this percentage of the total campaign fund is sent to a `Fee Cell` controlled by the Admin. All CKB amounts are handled directly, with no separate protocol token required.
+The protocol's business model is simple, transparent, and encoded on-chain. The `VaultCellData` contains a `fee_percentage` field. During the "Fan-Out," the `vault-type` contract enforces that this percentage of the total campaign fund is sent to a `Fee Cell` controlled by the Admin. All CKB amounts are handled directly, with no separate protocol token required.
 
 ### **6. Why Nervos CKB?**
 
@@ -89,7 +90,7 @@ Polymeer is uniquely suited to Nervos CKB and would be significantly more comple
 
 - **Cell Model:** Allows us to represent every logical component (vaults, proofs, shards) as a distinct, ownable on-chain object.
 - **Low-Level VM (RISC-V):** Enables us to write highly-optimized, secure contracts in a modern language like Rust.
-- **UTXO for Concurrency:** The ability to spend multiple inputs and create multiple outputs in one transaction is what makes the sharding model and the "Fan-Out" possible, enabling massive parallelism for claims.
+- **UTXO for Concurrency:** The ability to spend multiple inputs and create multiple outputs in one transaction is what makes the sharding model and the "Fan-Out" possible, enabling significant parallelism for claims.
 - **First-Class State:** CKB as a measure of state storage means that all on-chain data pays for its own existence, creating a sustainable and predictable economic model.
 
 ### **7. Use Cases & Future Vision**

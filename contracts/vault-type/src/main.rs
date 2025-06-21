@@ -50,34 +50,46 @@ fn entry() -> Result<(), Error> {
     );
 
     match (inputs_count, outputs_count) {
-        (0, 1) => verify_creation(),
-        (1, 0) => {
-            let context = load_context()?;
-
-            // Determine the action being performed by inspecting the outputs.
-            // The code hash of the Distribution contract must be passed in this Type Script's args.
-            let args = context.script.args();
-            if args.raw_data().len() != 64 {
-                Err(BizError::ArgumentLengthInvalid)?;
-            }
-
-            let mut dist_lock_code_hash = [0u8; 32];
-            dist_lock_code_hash.copy_from_slice(&args.raw_data()[0..32]);
-
-            let is_distribution_action = QueryIter::new(load_cell, Source::Output)
-                .any(|cell| cell.lock().code_hash().as_slice() == dist_lock_code_hash);
-
-            if is_distribution_action {
-                let mut dist_type_code_hash = [0u8; 32];
-                dist_type_code_hash.copy_from_slice(&args.raw_data()[32..64]);
-                verify_distribution(&context, &dist_lock_code_hash, &dist_type_code_hash)
-            } else {
-                verify_full_refund(&context)
-            }
+        (0, 1) => {
+            debug!("vault creation transaction");
+            // Creation of a new vault.
+            verify_creation()
         }
         (1, 1) => {
+            debug!("vault capacity adjustment transaction");
+            // Update of the vault, must be a capacity adjustment (increase/decrease).
+            // vault-lock ensures this is signed by the creator.
             let context = load_context()?;
-            verify_partial_refund(&context)
+            verify_capacity_adjustment(&context)
+        }
+        (1, 0) => {
+            // Destruction of the vault. This can be either a distribution or a full refund.
+            let context = load_context()?;
+            let args = load_script()?.args();
+            let args_bytes = args.raw_data();
+
+            if args_bytes.len() != 64 {
+                Err(BizError::ArgumentLengthInvalid)?;
+            }
+            // Args are valid, so this *could* be a distribution.
+            let mut dist_lock_code_hash = [0u8; 32];
+            dist_lock_code_hash.copy_from_slice(&args_bytes[0..32]);
+
+            let has_dist_shard = QueryIter::new(load_cell, Source::Output)
+                .any(|cell| cell.lock().code_hash().as_slice() == dist_lock_code_hash);
+
+            if has_dist_shard {
+                // This is a distribution.
+                // vault-lock ensures this is signed by the admin.
+                debug!("vault distribution transaction");
+                let mut dist_type_code_hash = [0u8; 32];
+                dist_type_code_hash.copy_from_slice(&args_bytes[32..64]);
+                verify_distribution(&context, &dist_lock_code_hash, &dist_type_code_hash)
+            } else {
+                // No distribution shards found, so it's a full refund.
+                debug!("vault destruction transaction (full refund)");
+                verify_full_refund(&context)
+            }
         }
         _ => Err(BizError::VaultTransactionInvalid)?,
     }
@@ -101,10 +113,6 @@ fn verify_creation() -> Result<(), Error> {
         Err(BizError::VaultDataInvalid)?;
     }
 
-    if vault_data.creator_lock_hash().as_slice() == NULL_HASH {
-        Err(BizError::VaultDataInvalid)?;
-    }
-
     if vault_data.proof_script_code_hash().as_slice() == NULL_HASH {
         Err(BizError::VaultDataInvalid)?;
     }
@@ -117,7 +125,59 @@ fn verify_distribution(
     dist_lock_code_hash: &[u8; 32],
     dist_type_code_hash: &[u8; 32],
 ) -> Result<(), Error> {
-    // 1. Calculate expected fee
+    // 1. Find all distribution shards and validate their data.
+    let mut total_dist_shards_capacity: u64 = 0;
+    let mut uniform_reward_amount: Option<u64> = None;
+
+    let dist_shards = QueryIter::new(load_cell, Source::Output)
+        .enumerate()
+        .filter(|(_i, cell)| cell.lock().code_hash().as_slice() == dist_lock_code_hash)
+        .collect::<alloc::vec::Vec<_>>();
+
+    if dist_shards.is_empty() {
+        // Must create at least one shard for a distribution.
+        Err(BizError::DistributionDataInvalid)?;
+    }
+
+    for (i, shard_cell) in dist_shards {
+        // Check for distribution type script
+        let type_script = shard_cell
+            .type_()
+            .to_opt()
+            .ok_or(BizError::DistributionDataInvalid)?;
+        if type_script.code_hash().as_slice() != dist_type_code_hash {
+            Err(BizError::DistributionDataInvalid)?;
+        }
+
+        let shard_capacity: u64 = shard_cell.capacity().unpack();
+        total_dist_shards_capacity += shard_capacity;
+
+        let shard_data_bytes = load_cell_data(i, Source::Output)?;
+        let shard_data = DistributionCellData::from_slice(&shard_data_bytes)
+            .map_err(|_| BizError::DistributionDataInvalid)?;
+
+        // On the first shard, capture the reward amount for consistency checks.
+        if uniform_reward_amount.is_none() {
+            let reward: u64 = shard_data.uniform_reward_amount().unpack();
+            if reward == 0 {
+                Err(BizError::ShardRewardInconsistent)?;
+            }
+            uniform_reward_amount = Some(reward);
+        }
+
+        // Validate data consistency against the vault and the first shard.
+        if shard_data.campaign_id().as_bytes() != context.vault_data.campaign_id().as_bytes()
+            || shard_data.proof_script_code_hash().as_bytes()
+                != context.vault_data.proof_script_code_hash().as_bytes()
+            // The admin lock hash in the shard must match the one from the vault's lock.
+            || shard_data.admin_lock_hash().as_slice() != context.admin_lock_hash
+            || shard_data.uniform_reward_amount().unpack() != uniform_reward_amount.unwrap()
+        {
+            Err(BizError::DistributionDataInvalid)?;
+        }
+    }
+
+    // 2. Calculate expected fee
     let fee_percentage: u128 = context.vault_data.fee_percentage().unpack().into();
     if fee_percentage > 10000 {
         Err(BizError::FeePercentageOutOfRange)?;
@@ -129,66 +189,13 @@ fn verify_distribution(
         Err(BizError::VaultTransactionInvalid)?;
     }
 
-    // 2. Find and validate all distribution shards in outputs.
-    let mut total_dist_shards_capacity: u64 = 0;
-    let mut uniform_reward_amount: Option<u64> = None;
-
-    let dist_shards = QueryIter::new(load_cell, Source::Output)
-        .enumerate()
-        .filter(|(_i, cell)| cell.lock().code_hash().as_slice() == dist_lock_code_hash);
-
-    for (i, shard_cell) in dist_shards {
-        // Check for distribution type script
-        if let Some(type_script) = shard_cell.type_().to_opt() {
-            if type_script.code_hash().as_slice() != dist_type_code_hash {
-                Err(BizError::DistributionDataInvalid)?;
-            }
-        } else {
-            Err(BizError::DistributionDataInvalid)?;
-        }
-
-        let shard_capacity: u64 = shard_cell.capacity().unpack();
-        total_dist_shards_capacity += shard_capacity;
-
-        let shard_data_bytes = load_cell_data(i, Source::Output)?;
-        let shard_data = DistributionCellData::from_slice(&shard_data_bytes)
-            .map_err(|_| BizError::DistributionDataInvalid)?;
-
-        // Validate data consistency.
-        if shard_data.campaign_id().as_bytes() != context.vault_data.campaign_id().as_bytes()
-            || shard_data.proof_script_code_hash().as_bytes()
-                != context.vault_data.proof_script_code_hash().as_bytes()
-            || shard_data.admin_lock_hash().as_slice() != context.admin_lock_hash
-        {
-            Err(BizError::DistributionDataInvalid)?;
-        }
-
-        let current_shard_reward: u64 = shard_data.uniform_reward_amount().unpack();
-        if current_shard_reward == 0 {
-            Err(BizError::ShardRewardInconsistent)?;
-        }
-
-        if let Some(first_amount) = uniform_reward_amount {
-            if first_amount != current_shard_reward {
-                Err(BizError::ShardRewardInconsistent)?;
-            }
-        } else {
-            uniform_reward_amount = Some(current_shard_reward);
-        }
-    }
-
-    if total_dist_shards_capacity == 0 {
-        // Must create at least one shard
-        Err(BizError::VaultTransactionInvalid)?;
-    }
-
     // 3. Verify capacity partitioning
     if total_dist_shards_capacity + expected_fee_capacity != total_capacity {
-        Err(BizError::DistributionCapacityMismatch)?;
+        Err(BizError::CapacityMismatch)?;
     }
 
     // 4. Find and validate the fee cell.
-    let fee_cells_found = QueryIter::new(load_cell, Source::Output)
+    let fee_cells_count = QueryIter::new(load_cell, Source::Output)
         .filter(|cell| {
             let lock_hash = cell.lock().calc_script_hash();
             let capacity: u64 = cell.capacity().unpack();
@@ -196,9 +203,9 @@ fn verify_distribution(
                 && capacity == expected_fee_capacity
                 && cell.type_().to_opt().is_none()
         })
-        .collect::<alloc::vec::Vec<_>>();
+        .count();
 
-    if fee_cells_found.len() != 1 {
+    if fee_cells_count != 1 {
         // Must be exactly one cell matching the fee criteria.
         Err(BizError::FeeCapacityMismatch)?;
     }
@@ -206,7 +213,8 @@ fn verify_distribution(
     Ok(())
 }
 
-fn verify_partial_refund(context: &VmContext) -> Result<(), Error> {
+fn verify_capacity_adjustment(context: &VmContext) -> Result<(), Error> {
+    let input_vault_cell = load_cell(0, Source::GroupInput)?;
     let output_vault_cell = load_cell(0, Source::GroupOutput)?;
     let output_vault_data_bytes = load_cell_data(0, Source::GroupOutput)?;
 
@@ -214,57 +222,57 @@ fn verify_partial_refund(context: &VmContext) -> Result<(), Error> {
         Err(BizError::VaultDataImmutable)?;
     }
 
+    if input_vault_cell.lock().as_slice() != output_vault_cell.lock().as_slice() {
+        Err(BizError::VaultLockScriptImmutable)?;
+    }
+
     let output_vault_capacity: u64 = output_vault_cell.capacity().unpack();
+
     if output_vault_capacity >= context.vault_capacity {
-        Err(BizError::PartialRefundInvalid)?;
+        return Ok(());
     }
 
-    let expected_refund_capacity = context.vault_capacity - output_vault_capacity;
+    // Sum capacity of all outputs going to the creator.
+    // Note: The output vault cell itself is NOT locked by the creator, so it won't be counted here.
+    let creator_output_capacity: u64 = QueryIter::new(load_cell, Source::Output)
+        .filter_map(|cell| {
+            if cell.lock().calc_script_hash().as_slice() == context.creator_lock_hash {
+                let cell_capacity: u64 = cell.capacity().unpack();
+                Some(cell_capacity)
+            } else {
+                None
+            }
+        })
+        .sum();
 
-    let creator_lock_hash: [u8; 32] = context.vault_data.creator_lock_hash().into();
-
-    let refund_cells_found = QueryIter::new(load_cell, Source::Output)
-        .filter(|cell| cell.lock().calc_script_hash().as_slice() == creator_lock_hash)
-        .collect::<alloc::vec::Vec<_>>();
-
-    if refund_cells_found.len() != 1 {
-        Err(BizError::PartialRefundInvalid)?;
-    }
-
-    let refund_cell = &refund_cells_found[0];
-    let actual_refund_capacity: u64 = refund_cell.capacity().unpack();
-
-    if actual_refund_capacity != expected_refund_capacity {
-        Err(BizError::DistributionCapacityMismatch)?;
-    }
-
-    if refund_cell.type_().to_opt().is_some() {
-        Err(BizError::PartialRefundInvalid)?;
+    if output_vault_capacity + creator_output_capacity < context.vault_capacity {
+        Err(BizError::CapacityAdjustmentInvalid)?;
     }
 
     Ok(())
 }
 
 fn verify_full_refund(context: &VmContext) -> Result<(), Error> {
-    let creator_lock_hash: [u8; 32] = context.vault_data.creator_lock_hash().into();
+    // In a full refund, the vault's capacity must be returned to the creator.
+    // We verify this by checking that the sum of capacities of output cells
+    // locked with the creator's lock hash is at least the vault's capacity.
+    // The vault-lock script ensures the creator signed the transaction, so they
+    // are in control of any other inputs/outputs. The CKB VM's balance check
+    // handles the rest.
 
-    let refund_cells_found = QueryIter::new(load_cell, Source::Output)
-        .filter(|cell| cell.lock().calc_script_hash().as_slice() == creator_lock_hash)
-        .collect::<alloc::vec::Vec<_>>();
+    let creator_output_capacity: u64 = QueryIter::new(load_cell, Source::Output)
+        .filter_map(|cell| {
+            if cell.lock().calc_script_hash().as_slice() == context.creator_lock_hash {
+                let cell_capacity: u64 = cell.capacity().unpack();
+                Some(cell_capacity)
+            } else {
+                None
+            }
+        })
+        .sum();
 
-    if refund_cells_found.len() != 1 {
-        Err(BizError::RefundLockHashMismatch)?;
-    }
-
-    let refund_cell = &refund_cells_found[0];
-    let actual_refund_capacity: u64 = refund_cell.capacity().unpack();
-
-    if actual_refund_capacity != context.vault_capacity {
-        Err(BizError::DistributionCapacityMismatch)?;
-    }
-
-    if refund_cell.type_().to_opt().is_some() {
-        Err(BizError::VaultTransactionInvalid)?;
+    if creator_output_capacity < context.vault_capacity {
+        Err(BizError::CapacityAdjustmentInvalid)?;
     }
 
     Ok(())

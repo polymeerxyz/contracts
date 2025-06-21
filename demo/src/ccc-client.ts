@@ -38,6 +38,7 @@ type MyScript =
   | "distribution-lock"
   | "distribution-type"
   | "proof-type"
+  | "vault-lock"
   | "vault-type";
 
 export function getMyScript(name: MyScript): ScriptInfo {

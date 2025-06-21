@@ -7,11 +7,6 @@ pub enum Error {
     ItemMissing,
     LengthNotEnough,
     Encoding,
-
-    InvalidArgumentCount = 10,
-    InvalidArgumentLength,
-    InvalidScriptHash,
-    MissingScriptHash,
 }
 
 impl From<SysError> for Error {

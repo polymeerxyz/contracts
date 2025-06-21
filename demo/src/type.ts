@@ -29,7 +29,6 @@ export const ProofData = mol.struct({
 
 export const VaultData = mol.struct({
   campaign_id: mol.Byte32,
-  creator_lock_hash: mol.Byte32,
   fee_percentage: mol.Uint16,
   proof_script_code_hash: mol.Byte32,
 });

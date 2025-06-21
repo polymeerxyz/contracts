@@ -2,8 +2,7 @@
   "name": "demo",
   "private": true,
   "scripts": {
-    "start": "tsx src/index.ts",
-    "prestart": "offckb sync-scripts"
+    "start": "tsx src/index.ts"
   },
   "dependencies": {
     "@ckb-ccc/core": "1.9.0",

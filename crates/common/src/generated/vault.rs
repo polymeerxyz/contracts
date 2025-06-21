@@ -22,7 +22,6 @@ impl ::core::fmt::Display for VaultCellData {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "campaign_id", self.campaign_id())?;
-        write!(f, ", {}: {}", "creator_lock_hash", self.creator_lock_hash())?;
         write!(f, ", {}: {}", "fee_percentage", self.fee_percentage())?;
         write!(
             f,
@@ -40,26 +39,22 @@ impl ::core::default::Default for VaultCellData {
     }
 }
 impl VaultCellData {
-    const DEFAULT_VALUE: [u8; 98] = [
+    const DEFAULT_VALUE: [u8; 66] = [
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
         0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0,
+        0, 0, 0, 0, 0, 0,
     ];
-    pub const TOTAL_SIZE: usize = 98;
-    pub const FIELD_SIZES: [usize; 4] = [32, 32, 2, 32];
-    pub const FIELD_COUNT: usize = 4;
+    pub const TOTAL_SIZE: usize = 66;
+    pub const FIELD_SIZES: [usize; 3] = [32, 2, 32];
+    pub const FIELD_COUNT: usize = 3;
     pub fn campaign_id(&self) -> Byte32 {
         Byte32::new_unchecked(self.0.slice(0..32))
     }
-    pub fn creator_lock_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(32..64))
-    }
     pub fn fee_percentage(&self) -> Uint16 {
-        Uint16::new_unchecked(self.0.slice(64..66))
+        Uint16::new_unchecked(self.0.slice(32..34))
     }
     pub fn proof_script_code_hash(&self) -> Byte32 {
-        Byte32::new_unchecked(self.0.slice(66..98))
+        Byte32::new_unchecked(self.0.slice(34..66))
     }
     pub fn as_reader<'r>(&'r self) -> VaultCellDataReader<'r> {
         VaultCellDataReader::new_unchecked(self.as_slice())
@@ -89,7 +84,6 @@ impl molecule::prelude::Entity for VaultCellData {
     fn as_builder(self) -> Self::Builder {
         Self::new_builder()
             .campaign_id(self.campaign_id())
-            .creator_lock_hash(self.creator_lock_hash())
             .fee_percentage(self.fee_percentage())
             .proof_script_code_hash(self.proof_script_code_hash())
     }
@@ -114,7 +108,6 @@ impl<'r> ::core::fmt::Display for VaultCellDataReader<'r> {
     fn fmt(&self, f: &mut ::core::fmt::Formatter) -> ::core::fmt::Result {
         write!(f, "{} {{ ", Self::NAME)?;
         write!(f, "{}: {}", "campaign_id", self.campaign_id())?;
-        write!(f, ", {}: {}", "creator_lock_hash", self.creator_lock_hash())?;
         write!(f, ", {}: {}", "fee_percentage", self.fee_percentage())?;
         write!(
             f,
@@ -126,20 +119,17 @@ impl<'r> ::core::fmt::Display for VaultCellDataReader<'r> {
     }
 }
 impl<'r> VaultCellDataReader<'r> {
-    pub const TOTAL_SIZE: usize = 98;
-    pub const FIELD_SIZES: [usize; 4] = [32, 32, 2, 32];
-    pub const FIELD_COUNT: usize = 4;
+    pub const TOTAL_SIZE: usize = 66;
+    pub const FIELD_SIZES: [usize; 3] = [32, 2, 32];
+    pub const FIELD_COUNT: usize = 3;
     pub fn campaign_id(&self) -> Byte32Reader<'r> {
         Byte32Reader::new_unchecked(&self.as_slice()[0..32])
     }
-    pub fn creator_lock_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[32..64])
-    }
     pub fn fee_percentage(&self) -> Uint16Reader<'r> {
-        Uint16Reader::new_unchecked(&self.as_slice()[64..66])
+        Uint16Reader::new_unchecked(&self.as_slice()[32..34])
     }
     pub fn proof_script_code_hash(&self) -> Byte32Reader<'r> {
-        Byte32Reader::new_unchecked(&self.as_slice()[66..98])
+        Byte32Reader::new_unchecked(&self.as_slice()[34..66])
     }
 }
 impl<'r> molecule::prelude::Reader<'r> for VaultCellDataReader<'r> {
@@ -166,20 +156,15 @@ impl<'r> molecule::prelude::Reader<'r> for VaultCellDataReader<'r> {
 #[derive(Clone, Debug, Default)]
 pub struct VaultCellDataBuilder {
     pub(crate) campaign_id: Byte32,
-    pub(crate) creator_lock_hash: Byte32,
     pub(crate) fee_percentage: Uint16,
     pub(crate) proof_script_code_hash: Byte32,
 }
 impl VaultCellDataBuilder {
-    pub const TOTAL_SIZE: usize = 98;
-    pub const FIELD_SIZES: [usize; 4] = [32, 32, 2, 32];
-    pub const FIELD_COUNT: usize = 4;
+    pub const TOTAL_SIZE: usize = 66;
+    pub const FIELD_SIZES: [usize; 3] = [32, 2, 32];
+    pub const FIELD_COUNT: usize = 3;
     pub fn campaign_id(mut self, v: Byte32) -> Self {
         self.campaign_id = v;
-        self
-    }
-    pub fn creator_lock_hash(mut self, v: Byte32) -> Self {
-        self.creator_lock_hash = v;
         self
     }
     pub fn fee_percentage(mut self, v: Uint16) -> Self {
@@ -199,7 +184,6 @@ impl molecule::prelude::Builder for VaultCellDataBuilder {
     }
     fn write<W: molecule::io::Write>(&self, writer: &mut W) -> molecule::io::Result<()> {
         writer.write_all(self.campaign_id.as_slice())?;
-        writer.write_all(self.creator_lock_hash.as_slice())?;
         writer.write_all(self.fee_percentage.as_slice())?;
         writer.write_all(self.proof_script_code_hash.as_slice())?;
         Ok(())

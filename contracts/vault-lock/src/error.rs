@@ -11,24 +11,8 @@ pub enum Error {
 #[derive(Debug)]
 #[repr(i8)]
 pub enum BizError {
-    // General
     ArgumentLengthInvalid = 20,
-    VaultDataInvalid,
-    VaultTransactionInvalid,
-
-    // Creation
-    FeePercentageOutOfRange,
-
-    // Distribution
-    CapacityMismatch, // Used for all capacity checks
-    DistributionDataInvalid,
-    ShardRewardInconsistent,
-    FeeCapacityMismatch,
-
-    // Refund / Capacity Adjustment
-    CapacityAdjustmentInvalid,
-    VaultDataImmutable,
-    VaultLockScriptImmutable,
+    UnauthorizedAction,
 }
 
 impl From<SysError> for Error {
@@ -51,7 +35,7 @@ impl From<CommonError> for Error {
 
 impl From<Error> for i8 {
     fn from(err: Error) -> i8 {
-        debug!("vault type error {:?}", err);
+        debug!("vault lock error {:?}", err);
         match err {
             Error::Sys(v) => match v {
                 SysError::IndexOutOfBound => 1,
